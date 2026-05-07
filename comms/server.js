@@ -3,6 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 
 const db = require('./db');
 
@@ -26,6 +27,31 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 5
 
 app.use(cors());
 app.use(express.json());
+
+// Ollama proxy — avoids CORS issues when dashboard is served from localhost
+app.all('/ollama/*', (req, res) => {
+  const ollamaPath = req.params[0]; // everything after /ollama/
+  const ollamaUrl = new URL('/' + ollamaPath, req.headers['x-ollama-host'] || 'http://100.80.126.45:11434');
+  const options = {
+    hostname: ollamaUrl.hostname,
+    port: ollamaUrl.port || 11434,
+    path: ollamaUrl.pathname + (req._parsedUrl.search || ''),
+    method: req.method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  const proxyReq = http.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('error', (e) => {
+    res.status(502).json({ error: 'Ollama proxy error: ' + e.message });
+  });
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    req.pipe(proxyReq);
+  } else {
+    proxyReq.end();
+  }
+});
 
 // Redirect root to comms.html
 app.get('/', (req, res) => res.redirect('/comms.html'));
