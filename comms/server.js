@@ -27,6 +27,9 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 5
 app.use(cors());
 app.use(express.json());
 
+// Redirect root to comms.html
+app.get('/', (req, res) => res.redirect('/comms.html'));
+
 // Serve static UI
 app.use(express.static(__dirname));
 
