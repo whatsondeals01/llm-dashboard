@@ -96,8 +96,8 @@ app.post('/api/channels/:id/messages', upload.array('files', 10), (req, res) => 
         storage_path: 'uploads/' + file.filename,
       });
     }
-    // Re-fetch to include attachments
-    const enriched = db.getMessages(channel_id).find(m => m.id === msg.id) || msg;
+    // Re-fetch single message to include attachments
+    const enriched = db.getMessageById(msg.id) || msg;
     return res.status(201).json(enriched);
   }
 

@@ -987,8 +987,13 @@ body::before {
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     // Italic
     html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--teal);text-decoration:underline;">$1</a>');
+    // Links (only allow http/https URLs)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, text, url) {
+      if (/^https?:\/\//i.test(url)) {
+        return '<a href="' + url + '" target="_blank" style="color:var(--teal);text-decoration:underline;">' + text + '</a>';
+      }
+      return match;
+    });
     // Newlines
     html = html.replace(/\n/g, '<br>');
     return html;
@@ -1081,8 +1086,9 @@ body::before {
       if (state.messages.length > 0) {
         state.lastMessageTime = state.messages[state.messages.length - 1].created_at;
       }
-      // Track members
-      state.messages.forEach(m => {
+      // Track members from new messages only
+      const newMsgs = initial ? state.messages : msgs;
+      newMsgs.forEach(m => {
         if (m.author_name) {
           state.members[m.author_name] = {
             type: m.author_type || 'human',
@@ -1128,11 +1134,10 @@ body::before {
     div.dataset.id = m.id;
 
     const typeClass = m.author_type === 'agent' ? 'agent' : 'human';
-    const badge = m.author_type === 'agent' ? 'agent' : 'human';
 
     let html = '<div class="msg-head">' +
       '<span class="msg-author ' + typeClass + '">' + escapeHtml(m.author_name) + '</span>' +
-      '<span class="msg-badge">' + badge + '</span>' +
+      '<span class="msg-badge">' + typeClass + '</span>' +
       '<span class="msg-time">' + formatTime(m.created_at) + '</span>' +
       '</div>';
 
@@ -1146,18 +1151,13 @@ body::before {
         const url = '/' + a.storage_path;
         const mime = a.mime_type || '';
         if (mime.startsWith('image/')) {
-          mediaHtml += '<img class="img-preview" src="' + escapeHtml(url) + '" alt="' + escapeHtml(a.original_name) + '">';
+          mediaHtml += '<img class="img-preview" src="' + escapeHtml(url) + '" alt="' + escapeHtml(a.filename) + '">';
         } else if (mime.startsWith('video/')) {
           mediaHtml += '<video class="video-preview" src="' + escapeHtml(url) + '" controls></video>';
         } else {
-          chipHtml += '<a class="attachment-chip" href="' + escapeHtml(url) + '" download="' + escapeHtml(a.original_name) + '">' + escapeHtml(a.original_name) + '</a>';
+          chipHtml += '<a class="attachment-chip" href="' + escapeHtml(url) + '" download="' + escapeHtml(a.filename) + '">' + escapeHtml(a.filename) + '</a>';
         }
       });
-      if (mediaHtml) {
-        // Insert media into msg-content area
-        html = html.replace('</div><!-- end-content -->', mediaHtml + '</div>');
-        // Actually, just append after content
-      }
       if (mediaHtml) html += mediaHtml;
       if (chipHtml) html += '<div class="msg-attachments">' + chipHtml + '</div>';
     }
@@ -1170,15 +1170,20 @@ body::before {
         const completedClass = ai.completed ? ' completed' : '';
         html += '<div class="action-item' + completedClass + '">' +
           '<input type="checkbox"' + checked + ' onchange="window.__toggleActionItem(' + ai.id + ', this.checked)">' +
-          '<label>' + escapeHtml(ai.title) + '</label></div>';
+          '<label>' + escapeHtml(ai.text) + '</label></div>';
       });
       html += '</div>';
     }
 
-    // Metadata
-    if (m.metadata && Object.keys(m.metadata).length) {
+    // Metadata (stored as JSON string in DB)
+    if (m.metadata) {
+      let metaDisplay;
+      try {
+        const parsed = typeof m.metadata === 'string' ? JSON.parse(m.metadata) : m.metadata;
+        metaDisplay = JSON.stringify(parsed, null, 2);
+      } catch { metaDisplay = String(m.metadata); }
       html += '<details class="msg-metadata"><summary>metadata</summary>' +
-        '<pre>' + escapeHtml(JSON.stringify(m.metadata, null, 2)) + '</pre></details>';
+        '<pre>' + escapeHtml(metaDisplay) + '</pre></details>';
     }
 
     // Thread indicator
@@ -1198,10 +1203,11 @@ body::before {
 
   async function toggleActionItem(id, checked) {
     try {
+      const completedBy = authorName.value.trim() || 'anonymous';
       await fetch(API + '/action-items/' + id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed: checked })
+        body: JSON.stringify({ completed: checked, completed_by: completedBy })
       });
       await loadMessages(true);
       pollActionCount();
@@ -1212,13 +1218,7 @@ body::before {
   // ===== Thread Functions =====
   async function openThread(messageId) {
     state.activeThread = messageId;
-    // Switch to thread tab
-    document.querySelectorAll('.right-panel-tab').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.panel === 'thread');
-    });
-    membersView.style.display = 'none';
-    threadView.style.display = 'flex';
-    threadView.classList.add('visible');
+    switchPanel('thread');
     await loadThread(messageId);
   }
   window.__openThread = openThread;
@@ -1303,7 +1303,7 @@ body::before {
         fd.append('author_type', type);
         fd.append('content', finalContent);
         if (actionItems.length) {
-          fd.append('action_items', JSON.stringify(actionItems.map(t => ({ title: t }))));
+          fd.append('action_items', JSON.stringify(actionItems));
         }
         state.pendingFiles.forEach(f => fd.append('files', f));
         await fetch(API + '/channels/' + state.activeChannel.id + '/messages', {
@@ -1317,7 +1317,7 @@ body::before {
           content: finalContent
         };
         if (actionItems.length) {
-          body.action_items = actionItems.map(t => ({ title: t }));
+          body.action_items = actionItems;
         }
         await fetch(API + '/channels/' + state.activeChannel.id + '/messages', {
           method: 'POST',
@@ -1397,13 +1397,11 @@ body::before {
   async function pollMessages() {
     if (!state.activeChannel) return;
     const wasAtBottom = messageFeed.scrollTop + messageFeed.clientHeight >= messageFeed.scrollHeight - 40;
-    await loadMessages(false);
+    const promises = [loadMessages(false)];
+    if (state.activeThread) promises.push(loadThread(state.activeThread));
+    await Promise.all(promises);
     if (wasAtBottom) {
       messageFeed.scrollTop = messageFeed.scrollHeight;
-    }
-    // Refresh thread if open
-    if (state.activeThread) {
-      await loadThread(state.activeThread);
     }
   }
 

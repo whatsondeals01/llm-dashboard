@@ -152,6 +152,12 @@ module.exports = {
     return enrichMessages(stmts.getThread.all(message_id));
   },
 
+  getMessageById(id) {
+    const row = stmts.getMessage.get(id);
+    if (!row) return null;
+    return enrichMessages([row])[0];
+  },
+
   addAttachment({ message_id, filename, mime_type, size_bytes, storage_path }) {
     return stmts.insertAttachment.get({ message_id, filename, mime_type, size_bytes, storage_path });
   },
