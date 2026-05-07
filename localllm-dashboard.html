@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LocalLLM · Mission Control</title>
+<title>LLM · Mission Control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -251,7 +251,7 @@
     white-space: pre-wrap; word-break: break-word;
     border-bottom: 1px solid var(--border);
     font-family: var(--mono);
-    min-height: 120px;
+    min-height: 200px;
   }
   #infer-output::-webkit-scrollbar { width: 4px; }
   #infer-output::-webkit-scrollbar-thumb { background: var(--border2); }
@@ -428,6 +428,15 @@
   }
   #center-top-section { flex-shrink: 0; border-bottom: 1px solid var(--border); }
   #center-tabs-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .tag.free { color: var(--green); border-color: var(--green2); }
+  .tag.coding { color: var(--cyan); border-color: var(--cyan); }
+  .tag.provider { color: var(--purple); border-color: var(--purple); }
+  .filter-bar { display: flex; gap: 4px; padding: 4px 8px; flex-wrap: wrap; }
+  .filter-bar button { font-family: var(--mono); font-size: 9px; padding: 2px 7px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: transparent; color: var(--text3); cursor: pointer; }
+  .filter-bar button.active { border-color: var(--green); color: var(--green); background: rgba(0,229,160,0.08); }
+  .filter-bar button:hover { border-color: var(--text2); color: var(--text2); }
+  .ollama-only { }
 </style>
 </head>
 <body>
@@ -436,7 +445,7 @@
 <div id="topbar">
   <div class="brand">
     <div class="pulse-dot" id="status-dot"></div>
-    LOCAL&nbsp;<span>LLM</span>&nbsp;CTRL
+    LLM&nbsp;<span>CTRL</span>
   </div>
   <div class="meta">
     <div class="meta-item">
@@ -457,9 +466,15 @@
     </div>
   </div>
   <div class="controls">
+    <select class="infer-select" id="provider-select" onchange="switchProvider(this.value)" style="width:120px;font-size:11px;">
+      <option value="ollama">Ollama</option>
+      <option value="openrouter">OpenRouter</option>
+    </select>
     <input class="endpoint-input" id="endpoint-input" value="http://localhost:11434" placeholder="http://localhost:11434">
+    <input class="endpoint-input" id="openrouter-key" type="password" placeholder="OpenRouter API key" style="display:none;width:240px;">
     <button class="btn primary" onclick="refreshAll()">⟳ Refresh</button>
     <button class="btn" onclick="runBenchmark()">⚡ Bench</button>
+    <button class="btn" onclick="window.open('http://localhost:3033/comms.html','_blank')">Comms</button>
   </div>
 </div>
 
@@ -474,6 +489,11 @@
     </div>
     <div class="panel-body">
       <input type="text" id="model-search" placeholder="filter models…" oninput="filterModels(this.value)">
+      <div class="filter-bar" id="model-filter-bar" style="display:none;">
+        <button class="active" onclick="setModelFilter('all',this)">All</button>
+        <button onclick="setModelFilter('free',this)">Free</button>
+        <button onclick="setModelFilter('coding',this)">Coding</button>
+      </div>
       <div id="model-list">
         <div class="empty-state">Connect to Ollama to see models</div>
       </div>
@@ -488,7 +508,7 @@
         <span class="panel-title">System Status</span>
         <span id="last-refresh" style="font-size:9px;color:var(--text3);">never</span>
       </div>
-      <div class="stat-grid">
+      <div class="stat-grid ollama-only">
         <div class="stat-box">
           <div class="s-label">VRAM Total</div>
           <div class="s-value green" id="s-vram-total">16 GB</div>
@@ -505,14 +525,14 @@
           <div class="s-sub">DDR5 · SER9 Pro</div>
         </div>
       </div>
-      <div class="vram-section">
+      <div class="vram-section ollama-only">
         <div class="vram-label">
           <span>VRAM Pressure</span>
           <span id="vram-pct-label">0%</span>
         </div>
         <div class="vram-bar"><div class="vram-fill" id="vram-bar-fill" style="width:0%"></div></div>
       </div>
-      <div class="running-section">
+      <div class="running-section ollama-only">
         <div class="sec-title">Loaded Models</div>
         <div id="running-models-list">
           <div class="empty-state" style="padding:8px 0;text-align:left;">None loaded</div>
@@ -567,7 +587,7 @@
         </div>
         <div id="infer-output"><span class="infer-placeholder">Select a model and type a prompt below…</span></div>
         <div id="infer-prompt-area">
-          <textarea id="infer-prompt" placeholder="Prompt (Shift+Enter for newline, Enter to send)…" rows="3"></textarea>
+          <textarea id="infer-prompt" placeholder="Prompt (Shift+Enter for newline, Enter to send)…" rows="6"></textarea>
           <button class="btn primary" onclick="runInfer()" style="align-self:flex-end;">▶ Run</button>
         </div>
       </div>
@@ -595,7 +615,7 @@
           <div style="color:var(--text3);font-size:11px;text-align:center;padding:20px;">Select a model and start chatting. Full multi-turn history sent each request.</div>
         </div>
         <div id="chat-input-area">
-          <textarea id="chat-input" placeholder="Message (Enter to send, Shift+Enter for newline)…" rows="3"></textarea>
+          <textarea id="chat-input" placeholder="Message (Enter to send, Shift+Enter for newline)…" rows="6"></textarea>
           <button class="btn primary" onclick="sendChat()" style="align-self:flex-end;">▶ Send</button>
         </div>
       </div>
@@ -793,9 +813,56 @@ let state = {
   inferAbort: null,
   benchResults: [],
   log: [],
+  provider: 'ollama',        // 'ollama' | 'openrouter'
+  modelFilter: 'all',        // 'all' | 'free' | 'coding'
+  openrouterMeta: {},         // id -> {free, coding, context_length, description}
 };
 
 let ENDPOINT = () => document.getElementById('endpoint-input').value.replace(/\/$/, '');
+const OR_BASE = 'https://openrouter.ai/api/v1';
+
+function getORKey() {
+  return document.getElementById('openrouter-key').value.trim();
+}
+
+// Coding model patterns
+const CODING_PATTERNS = /code|coder|codestral|starcoder|deepseek-coder|qwen.*coder|wizard.*code|phind|magicoder|codellama|openchat/i;
+
+function isOpenRouter() { return state.provider === 'openrouter'; }
+
+function switchProvider(p) {
+  state.provider = p;
+  const isOR = p === 'openrouter';
+  document.getElementById('endpoint-input').style.display = isOR ? 'none' : '';
+  document.getElementById('openrouter-key').style.display = isOR ? '' : 'none';
+  document.getElementById('model-filter-bar').style.display = isOR ? 'flex' : 'none';
+
+  // Hide/show ollama-specific UI
+  document.querySelectorAll('.ollama-only').forEach(el => el.style.display = isOR ? 'none' : '');
+
+  // Save provider choice
+  localStorage.setItem('llm-provider', p);
+
+  state.models = [];
+  state.runningModels = [];
+  state.openrouterMeta = {};
+  startAutoRefresh();
+  refreshAll();
+}
+
+// Save/load OR key
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('openrouter-key');
+  if (saved) document.getElementById('openrouter-key').value = saved;
+  document.getElementById('openrouter-key').addEventListener('change', function() {
+    localStorage.setItem('openrouter-key', this.value);
+  });
+  const savedProvider = localStorage.getItem('llm-provider');
+  if (savedProvider) {
+    document.getElementById('provider-select').value = savedProvider;
+    switchProvider(savedProvider);
+  }
+});
 
 // ==================== UTILS ====================
 function toast(msg, type='ok') {
@@ -871,7 +938,8 @@ async function api(path, opts={}) {
 }
 
 async function refreshAll() {
-  logEvent('Refreshing...', 'info');
+  if (isOpenRouter()) return refreshAllOpenRouter();
+  logEvent('Refreshing Ollama...', 'info');
   document.getElementById('status-dot').className = 'pulse-dot amber';
   try {
     // Version
@@ -903,6 +971,74 @@ async function refreshAll() {
   }
 }
 
+async function refreshAllOpenRouter() {
+  const key = getORKey();
+  if (!key) {
+    toast('Enter your OpenRouter API key', 'error');
+    document.getElementById('status-dot').className = 'pulse-dot red';
+    return;
+  }
+  logEvent('Fetching OpenRouter models...', 'info');
+  document.getElementById('status-dot').className = 'pulse-dot amber';
+  try {
+    const resp = await fetch(OR_BASE + '/models', {
+      headers: { 'Authorization': 'Bearer ' + key }
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const allModels = data.data || [];
+
+    // Build metadata map and model list
+    state.openrouterMeta = {};
+    state.models = allModels.map(m => {
+      const isFree = (parseFloat(m.pricing?.prompt || '1') === 0 && parseFloat(m.pricing?.completion || '1') === 0);
+      const isCoding = CODING_PATTERNS.test(m.id) || CODING_PATTERNS.test(m.name || '');
+      state.openrouterMeta[m.id] = {
+        free: isFree,
+        coding: isCoding,
+        context_length: m.context_length || 0,
+        description: m.description || '',
+      };
+      return {
+        name: m.id,
+        displayName: m.name || m.id,
+        size: m.context_length || 0, // use context_length for sorting
+        _or: true,
+      };
+    });
+
+    // Sort: free first, then coding, then alpha
+    state.models.sort((a, b) => {
+      const am = state.openrouterMeta[a.name] || {};
+      const bm = state.openrouterMeta[b.name] || {};
+      if (am.free !== bm.free) return am.free ? -1 : 1;
+      if (am.coding !== bm.coding) return am.coding ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    document.getElementById('meta-version').textContent = 'OpenRouter';
+    document.getElementById('meta-models').textContent = state.models.length;
+    document.getElementById('model-count-badge').textContent = state.models.length;
+    document.getElementById('meta-running').textContent = 'n/a';
+    document.getElementById('meta-vram').textContent = 'cloud';
+
+    renderModelList();
+    populateInferSelect();
+    populateBenchCheckboxes();
+
+    document.getElementById('status-dot').className = 'pulse-dot';
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+    const freeCount = Object.values(state.openrouterMeta).filter(m => m.free).length;
+    const codeCount = Object.values(state.openrouterMeta).filter(m => m.coding).length;
+    logEvent(`OpenRouter: ${state.models.length} models (${freeCount} free, ${codeCount} coding)`, 'ok');
+  } catch(e) {
+    document.getElementById('status-dot').className = 'pulse-dot red';
+    document.getElementById('meta-version').textContent = 'error';
+    logEvent('OpenRouter error: ' + e.message, 'error');
+    toast('OpenRouter: ' + e.message, 'error');
+  }
+}
+
 async function refreshRunning() {
   try {
     const pr = await api('/api/ps');
@@ -920,24 +1056,58 @@ async function refreshRunning() {
 // ==================== RENDER ====================
 function renderModelList(filter='') {
   const list = document.getElementById('model-list');
-  const filtered = filter
-    ? state.models.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
-    : state.models;
+  let filtered = filter
+    ? state.models.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()) ||
+        (m.displayName && m.displayName.toLowerCase().includes(filter.toLowerCase())))
+    : [...state.models];
+
+  // Apply OpenRouter filters
+  if (isOpenRouter() && state.modelFilter !== 'all') {
+    filtered = filtered.filter(m => {
+      const meta = state.openrouterMeta[m.name] || {};
+      if (state.modelFilter === 'free') return meta.free;
+      if (state.modelFilter === 'coding') return meta.coding;
+      return true;
+    });
+  }
 
   if (!filtered.length) {
     list.innerHTML = '<div class="empty-state">No models found</div>';
     return;
   }
 
-  // Sort by size desc
-  const sorted = [...filtered].sort((a, b) => (b.size || 0) - (a.size || 0));
+  if (!isOpenRouter()) {
+    // Ollama: sort by size desc
+    filtered.sort((a, b) => (b.size || 0) - (a.size || 0));
+  }
+
   const runningNames = new Set(state.runningModels.map(m => m.name));
 
-  list.innerHTML = sorted.map(m => {
+  list.innerHTML = filtered.map(m => {
+    const escapedName = m.name.replace(/'/g, "\\'");
+    if (isOpenRouter()) {
+      const orMeta = state.openrouterMeta[m.name] || {};
+      const displayName = m.displayName || m.name;
+      const ctxK = orMeta.context_length ? Math.round(orMeta.context_length / 1024) + 'k' : '';
+      return `
+      <div class="model-card" onclick="selectModel('${escapedName}')" title="${(orMeta.description||'').replace(/"/g,'&quot;').substring(0,200)}">
+        <div style="padding-right:60px;">
+          <div class="model-name" style="font-size:10px;">${displayName}</div>
+          <div class="model-meta">
+            ${orMeta.free ? '<span class="tag free">FREE</span>' : ''}
+            ${orMeta.coding ? '<span class="tag coding">code</span>' : ''}
+            ${ctxK ? `<span class="tag size">${ctxK} ctx</span>` : ''}
+          </div>
+        </div>
+        <div class="model-run-btn">
+          <button class="btn primary" style="font-size:9px;padding:3px 8px;" onclick="event.stopPropagation();selectModelAndRun('${escapedName}')">▶ Use</button>
+        </div>
+      </div>`;
+    }
     const meta = parseModelMeta(m);
     const isRunning = runningNames.has(m.name);
     return `
-    <div class="model-card ${isRunning ? 'running' : ''}" onclick="selectModel('${m.name}')">
+    <div class="model-card ${isRunning ? 'running' : ''}" onclick="selectModel('${escapedName}')">
       <div style="padding-right:60px;">
         <div class="model-name">${meta.name}</div>
         <div class="model-meta">
@@ -948,7 +1118,7 @@ function renderModelList(filter='') {
         </div>
       </div>
       <div class="model-run-btn">
-        <button class="btn primary" style="font-size:9px;padding:3px 8px;" onclick="event.stopPropagation();selectModelAndRun('${m.name}')">▶ Use</button>
+        <button class="btn primary" style="font-size:9px;padding:3px 8px;" onclick="event.stopPropagation();selectModelAndRun('${escapedName}')">▶ Use</button>
       </div>
     </div>`;
   }).join('');
@@ -994,15 +1164,21 @@ function updateVramDisplay() {
 function populateInferSelect() {
   const sel = document.getElementById('infer-model');
   const cur = sel.value;
+  const label = m => {
+    if (!isOpenRouter()) return m.name;
+    const meta = state.openrouterMeta[m.name] || {};
+    const prefix = meta.free ? '[FREE] ' : '';
+    return prefix + (m.displayName || m.name);
+  };
   sel.innerHTML = '<option value="">— select model —</option>' +
-    state.models.map(m => `<option value="${m.name}" ${m.name===cur?'selected':''}>${m.name}</option>`).join('');
+    state.models.map(m => `<option value="${m.name}" ${m.name===cur?'selected':''}>${label(m)}</option>`).join('');
   if (state.selectedModel) sel.value = state.selectedModel;
 
   // also populate chat model select
   const csel = document.getElementById('chat-model');
   const ccur = csel.value;
   csel.innerHTML = '<option value="">— select model —</option>' +
-    state.models.map(m => `<option value="${m.name}" ${m.name===ccur?'selected':''}>${m.name}</option>`).join('');
+    state.models.map(m => `<option value="${m.name}" ${m.name===ccur?'selected':''}>${label(m)}</option>`).join('');
   if (state.selectedModel) csel.value = state.selectedModel;
 }
 
@@ -1033,6 +1209,13 @@ function selectModelAndRun(name) {
 }
 
 function filterModels(q) { renderModelList(q); }
+
+function setModelFilter(filter, btn) {
+  state.modelFilter = filter;
+  document.querySelectorAll('#model-filter-bar button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderModelList(document.getElementById('model-search').value);
+}
 
 async function unloadModel(name) {
   try {
@@ -1069,23 +1252,27 @@ async function runInfer() {
   output.innerHTML = '<span class="infer-thinking">▌ generating…</span>';
   inferStats = { startTime: Date.now(), firstTokenTime: null, tokenCount: 0 };
 
-  const body = {
-    model,
-    prompt,
-    stream: true,
-    options: { temperature: parseFloat(document.getElementById('infer-temp').value) }
-  };
-
+  const temp = parseFloat(document.getElementById('infer-temp').value);
   const ctrl = new AbortController();
   state.inferAbort = ctrl;
 
   try {
-    const resp = await fetch(ENDPOINT() + '/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: ctrl.signal
-    });
+    let resp;
+    if (isOpenRouter()) {
+      resp = await fetch(OR_BASE + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getORKey() },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], stream: true, temperature: temp }),
+        signal: ctrl.signal
+      });
+    } else {
+      resp = await fetch(ENDPOINT() + '/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt, stream: true, options: { temperature: temp } }),
+        signal: ctrl.signal
+      });
+    }
 
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
@@ -1099,16 +1286,24 @@ async function runInfer() {
       if (done) break;
       const lines = dec.decode(value, { stream: true }).split('\n');
       for (const line of lines) {
-        if (!line.trim()) continue;
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        const jsonStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
+        if (!jsonStr) continue;
         try {
-          const j = JSON.parse(line);
-          if (j.response) {
+          const j = JSON.parse(jsonStr);
+          // OpenRouter (SSE) format
+          const chunk = j.choices?.[0]?.delta?.content;
+          // Ollama format
+          const ollamaChunk = j.response;
+          const token = chunk || ollamaChunk;
+          if (token) {
             if (!inferStats.firstTokenTime) {
               inferStats.firstTokenTime = Date.now();
               document.getElementById('is-ttft').textContent = (inferStats.firstTokenTime - inferStats.startTime) + 'ms';
               document.getElementById('is-ttft').className = 'is-value';
             }
-            text += j.response;
+            text += token;
             inferStats.tokenCount++;
             output.textContent = text;
             output.scrollTop = output.scrollHeight;
@@ -1123,6 +1318,7 @@ async function runInfer() {
             document.getElementById('is-total').textContent = elapsed.toFixed(1) + 's';
             document.getElementById('is-total').className = 'is-value';
           }
+          // Ollama final stats
           if (j.done) {
             const finalTps = j.eval_count && j.eval_duration ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1) : null;
             if (finalTps) {
@@ -1135,7 +1331,8 @@ async function runInfer() {
     }
     document.getElementById('is-status').textContent = 'done';
     document.getElementById('is-status').style.color = 'var(--text3)';
-    refreshRunning();
+    if (!isOpenRouter()) refreshRunning();
+    else logEvent(`${model}: ${inferStats.tokenCount} tokens`, 'ok');
   } catch(e) {
     if (e.name !== 'AbortError') {
       output.textContent = '⚠ Error: ' + e.message;
@@ -1190,17 +1387,31 @@ async function runBenchmark() {
 
     try {
       const start = Date.now();
-      const resp = await fetch(ENDPOINT() + '/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0.1, num_predict: 80 } })
-      });
-      const j = await resp.json();
-      const elapsed = (Date.now() - start) / 1000;
-      const tps = j.eval_count && j.eval_duration
-        ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1)
-        : (j.eval_count / elapsed).toFixed(1);
-      const ttft = j.prompt_eval_duration ? (j.prompt_eval_duration / 1e6).toFixed(0) + 'ms' : '?';
+      let j, elapsed, tps, ttft;
+      if (isOpenRouter()) {
+        const resp = await fetch(OR_BASE + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getORKey() },
+          body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 80 })
+        });
+        j = await resp.json();
+        elapsed = (Date.now() - start) / 1000;
+        const tokens = j.usage?.completion_tokens || 0;
+        tps = tokens > 0 ? (tokens / elapsed).toFixed(1) : '?';
+        ttft = '?';
+      } else {
+        const resp = await fetch(ENDPOINT() + '/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0.1, num_predict: 80 } })
+        });
+        j = await resp.json();
+        elapsed = (Date.now() - start) / 1000;
+        tps = j.eval_count && j.eval_duration
+          ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1)
+          : (j.eval_count / elapsed).toFixed(1);
+        ttft = j.prompt_eval_duration ? (j.prompt_eval_duration / 1e6).toFixed(0) + 'ms' : '?';
+      }
 
       state.benchResults.push({ model, tps: parseFloat(tps), ttft });
       const row = document.getElementById(rowId);
@@ -1224,7 +1435,7 @@ async function runBenchmark() {
     logEvent(`Best: ${sorted[0].model} @ ${sorted[0].tps} t/s`, 'ok');
   }
   toast('Benchmark complete');
-  refreshRunning();
+  if (!isOpenRouter()) refreshRunning();
 }
 
 // ==================== TABS ====================
@@ -1313,12 +1524,22 @@ async function sendChat() {
   const start = Date.now();
 
   try {
-    const resp = await fetch(ENDPOINT() + '/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true, options: { temperature: 0.7 } }),
-      signal: ctrl.signal
-    });
+    let resp;
+    if (isOpenRouter()) {
+      resp = await fetch(OR_BASE + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getORKey() },
+        body: JSON.stringify({ model, messages, stream: true, temperature: 0.7 }),
+        signal: ctrl.signal
+      });
+    } else {
+      resp = await fetch(ENDPOINT() + '/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: true, options: { temperature: 0.7 } }),
+        signal: ctrl.signal
+      });
+    }
 
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
@@ -1328,17 +1549,26 @@ async function sendChat() {
       if (done) break;
       const lines = dec.decode(value, { stream: true }).split('\n');
       for (const line of lines) {
-        if (!line.trim()) continue;
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        const jsonStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
+        if (!jsonStr) continue;
         try {
-          const j = JSON.parse(line);
-          if (j.message?.content) {
-            fullText += j.message.content;
+          const j = JSON.parse(jsonStr);
+          // OpenRouter SSE format
+          const chunk = j.choices?.[0]?.delta?.content;
+          // Ollama format
+          const ollamaChunk = j.message?.content;
+          const token = chunk || ollamaChunk;
+          if (token) {
+            fullText += token;
             tokenCount++;
             bubble.textContent = fullText;
             document.getElementById('chat-messages').scrollTop = 9999;
             const tps = (tokenCount / ((Date.now() - start) / 1000)).toFixed(1);
             document.getElementById('chat-tps').textContent = tps;
           }
+          // Ollama final stats
           if (j.done) {
             const finalTps = j.eval_count && j.eval_duration
               ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1) : null;
@@ -1372,7 +1602,7 @@ async function sendChat() {
   chatRunning = false;
   chatAbort = null;
   document.getElementById('chat-stop-btn').style.display = 'none';
-  refreshRunning();
+  if (!isOpenRouter()) refreshRunning();
 }
 
 // ==================== VRAM CALC ====================
@@ -1393,7 +1623,10 @@ function calcVram() {
 // ==================== AUTO-REFRESH ====================
 let autoRefreshInterval = null;
 function startAutoRefresh() {
-  autoRefreshInterval = setInterval(refreshRunning, 8000); // refresh running models every 8s
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  if (!isOpenRouter()) {
+    autoRefreshInterval = setInterval(refreshRunning, 8000); // refresh running models every 8s
+  }
 }
 
 // ==================== INIT ====================

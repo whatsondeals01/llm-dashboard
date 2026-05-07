@@ -1,2 +1,6 @@
 *.log
 *.Identifier
+comms/node_modules/
+comms/uploads/
+comms/comms.db
+comms/test-*.db
