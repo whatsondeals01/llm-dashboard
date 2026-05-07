@@ -426,7 +426,11 @@
     display: flex; flex-direction: column;
     overflow: hidden;
   }
-  #center-top-section { flex-shrink: 0; border-bottom: 1px solid var(--border); }
+  #center-top-section { flex-shrink: 0; border-bottom: 1px solid var(--border); overflow: hidden; }
+  #center-top-section.collapsed .stat-grid,
+  #center-top-section.collapsed .vram-section,
+  #center-top-section.collapsed .running-section { display: none; }
+  .collapse-toggle { background: none; border: none; color: var(--text3); cursor: pointer; font-family: var(--mono); font-size: 10px; padding: 2px 6px; }
   #center-tabs-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .tag.free { color: var(--green); border-color: var(--green2); }
   .tag.coding { color: var(--cyan); border-color: var(--cyan); }
@@ -503,10 +507,13 @@
   <!-- CENTER -->
   <div class="panel" id="center-col" style="border-right:1px solid var(--border);">
     <!-- Status Section -->
-    <div id="center-top-section">
+    <div id="center-top-section" class="collapsed">
       <div class="panel-header">
         <span class="panel-title">System Status</span>
-        <span id="last-refresh" style="font-size:9px;color:var(--text3);">never</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span id="last-refresh" style="font-size:9px;color:var(--text3);">never</span>
+          <button class="collapse-toggle" onclick="document.getElementById('center-top-section').classList.toggle('collapsed');this.textContent=this.textContent==='▼'?'▲':'▼'">▼</button>
+        </span>
       </div>
       <div class="stat-grid ollama-only">
         <div class="stat-box">
