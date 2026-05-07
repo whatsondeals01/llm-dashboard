@@ -470,7 +470,7 @@
       <option value="ollama">Ollama</option>
       <option value="openrouter">OpenRouter</option>
     </select>
-    <input class="endpoint-input" id="endpoint-input" value="http://localhost:11434" placeholder="http://localhost:11434">
+    <input class="endpoint-input" id="endpoint-input" value="http://100.80.126.45:11434" placeholder="http://100.80.126.45:11434">
     <input class="endpoint-input" id="openrouter-key" type="password" placeholder="OpenRouter API key" style="display:none;width:240px;">
     <button class="btn primary" onclick="refreshAll()">⟳ Refresh</button>
     <button class="btn" onclick="runBenchmark()">⚡ Bench</button>
@@ -856,6 +856,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('openrouter-key').addEventListener('change', function() {
     localStorage.setItem('openrouter-key', this.value);
   });
+  // Restore endpoint
+  const savedEndpoint = localStorage.getItem('llm-endpoint');
+  if (savedEndpoint) document.getElementById('endpoint-input').value = savedEndpoint;
+  document.getElementById('endpoint-input').addEventListener('change', function() {
+    localStorage.setItem('llm-endpoint', this.value);
+  });
+  // Restore provider
   const savedProvider = localStorage.getItem('llm-provider');
   if (savedProvider) {
     document.getElementById('provider-select').value = savedProvider;
