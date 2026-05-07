@@ -922,7 +922,594 @@ body::before {
 </div>
 
 <script>
-// JavaScript goes in Task 4
+(function() {
+  'use strict';
+
+  const API = window.location.origin + '/api';
+
+  let state = {
+    channels: [],
+    activeChannel: null,
+    messages: [],
+    lastMessageTime: null,
+    activeThread: null,
+    threadMessages: [],
+    pendingFiles: [],
+    members: {}
+  };
+
+  // ===== DOM refs =====
+  const $ = id => document.getElementById(id);
+  const statMsgCount    = $('stat-msg-count');
+  const statOpenItems   = $('stat-open-items');
+  const channelList     = $('channel-list');
+  const btnNewChannel   = $('btn-new-channel');
+  const chHeaderName    = $('ch-header-name');
+  const chHeaderDesc    = $('ch-header-desc');
+  const messageFeed     = $('message-feed');
+  const feedEmpty       = $('feed-empty');
+  const composeBar      = $('compose-bar');
+  const filePreviews    = $('file-previews');
+  const authorName      = $('author-name');
+  const authorType      = $('author-type');
+  const btnAttach       = $('btn-attach');
+  const fileInput       = $('file-input');
+  const composeTextarea = $('compose-textarea');
+  const btnSend         = $('btn-send');
+  const membersView     = $('members-view');
+  const threadView      = $('thread-view');
+  const threadParentAuthor = $('thread-parent-author');
+  const threadMessages  = $('thread-messages');
+  const threadTextarea  = $('thread-textarea');
+  const btnThreadSend   = $('btn-thread-send');
+  const modalOverlay    = $('modal-overlay');
+  const modalChName     = $('modal-ch-name');
+  const modalChDesc     = $('modal-ch-desc');
+  const modalCancel     = $('modal-cancel');
+  const modalCreate     = $('modal-create');
+
+  // ===== Helpers =====
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    let html = escapeHtml(text);
+    // Code blocks: ```...```
+    html = html.replace(/```([\s\S]*?)```/g, function(_, code) {
+      return '<pre onclick="this.classList.toggle(\'expanded\')"><code>' + code.trim() + '</code></pre>';
+    });
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Bold
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Italic
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // Links
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--teal);text-decoration:underline;">$1</a>');
+    // Newlines
+    html = html.replace(/\n/g, '<br>');
+    return html;
+  }
+
+  function formatTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    const now = new Date();
+    const diff = (now - d) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ===== Channel Functions =====
+  async function loadChannels() {
+    try {
+      const res = await fetch(API + '/channels');
+      state.channels = await res.json();
+      renderChannels();
+    } catch (e) { console.error('loadChannels', e); }
+  }
+
+  function renderChannels() {
+    channelList.innerHTML = state.channels.map(ch => {
+      const active = state.activeChannel && state.activeChannel.id === ch.id ? ' active' : '';
+      return '<div class="channel-item' + active + '" data-id="' + ch.id + '">' +
+        '<span class="ch-prefix">#</span>' +
+        '<span class="ch-name">' + escapeHtml(ch.name) + '</span>' +
+        '</div>';
+    }).join('');
+    channelList.querySelectorAll('.channel-item').forEach(el => {
+      el.addEventListener('click', () => selectChannel(parseInt(el.dataset.id)));
+    });
+  }
+
+  async function selectChannel(id) {
+    const ch = state.channels.find(c => c.id === id);
+    if (!ch) return;
+    state.activeChannel = ch;
+    state.messages = [];
+    state.lastMessageTime = null;
+    state.members = {};
+    chHeaderName.textContent = ch.name;
+    chHeaderDesc.textContent = ch.description || '';
+    composeTextarea.placeholder = 'Message #' + ch.name + '...';
+    renderChannels();
+    await loadMessages(true);
+    renderMembers();
+  }
+
+  async function createChannel() {
+    const name = modalChName.value.trim();
+    const desc = modalChDesc.value.trim();
+    if (!name) return;
+    try {
+      const res = await fetch(API + '/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, description: desc })
+      });
+      const newCh = await res.json();
+      await loadChannels();
+      selectChannel(newCh.id);
+      hideModal();
+    } catch (e) { console.error('createChannel', e); }
+  }
+
+  // ===== Message Functions =====
+  async function loadMessages(initial) {
+    if (!state.activeChannel) return;
+    let url = API + '/channels/' + state.activeChannel.id + '/messages';
+    if (initial || !state.lastMessageTime) {
+      url += '?limit=50';
+    } else {
+      url += '?since=' + encodeURIComponent(state.lastMessageTime);
+    }
+    try {
+      const res = await fetch(url);
+      const msgs = await res.json();
+      if (initial) {
+        state.messages = msgs;
+      } else if (msgs.length) {
+        // Append new messages, avoid duplicates
+        const existingIds = new Set(state.messages.map(m => m.id));
+        msgs.forEach(m => { if (!existingIds.has(m.id)) state.messages.push(m); });
+      }
+      if (state.messages.length > 0) {
+        state.lastMessageTime = state.messages[state.messages.length - 1].created_at;
+      }
+      // Track members
+      state.messages.forEach(m => {
+        if (m.author_name) {
+          state.members[m.author_name] = {
+            type: m.author_type || 'human',
+            lastSeen: m.created_at
+          };
+        }
+      });
+      statMsgCount.textContent = state.messages.length;
+      renderMessages();
+      if (!initial) renderMembers();
+    } catch (e) { console.error('loadMessages', e); }
+  }
+
+  function renderMessages() {
+    // Check if user is scrolled near bottom before rendering
+    const isAtBottom = messageFeed.scrollTop + messageFeed.clientHeight >= messageFeed.scrollHeight - 40;
+
+    // Remove old messages but keep feed-empty
+    const oldMsgs = messageFeed.querySelectorAll('.msg-group');
+    oldMsgs.forEach(el => el.remove());
+
+    if (state.messages.length === 0) {
+      feedEmpty.style.display = '';
+      return;
+    }
+    feedEmpty.style.display = 'none';
+
+    const frag = document.createDocumentFragment();
+    state.messages.forEach(m => {
+      const el = renderMessage(m);
+      frag.appendChild(el);
+    });
+    messageFeed.insertBefore(frag, feedEmpty);
+
+    if (isAtBottom) {
+      messageFeed.scrollTop = messageFeed.scrollHeight;
+    }
+  }
+
+  function renderMessage(m) {
+    const div = document.createElement('div');
+    div.className = 'msg-group';
+    div.dataset.id = m.id;
+
+    const typeClass = m.author_type === 'agent' ? 'agent' : 'human';
+    const badge = m.author_type === 'agent' ? 'agent' : 'human';
+
+    let html = '<div class="msg-head">' +
+      '<span class="msg-author ' + typeClass + '">' + escapeHtml(m.author_name) + '</span>' +
+      '<span class="msg-badge">' + badge + '</span>' +
+      '<span class="msg-time">' + formatTime(m.created_at) + '</span>' +
+      '</div>';
+
+    html += '<div class="msg-content">' + renderMarkdown(m.content) + '</div>';
+
+    // Attachments
+    if (m.attachments && m.attachments.length) {
+      let mediaHtml = '';
+      let chipHtml = '';
+      m.attachments.forEach(a => {
+        const url = '/' + a.storage_path;
+        const mime = a.mime_type || '';
+        if (mime.startsWith('image/')) {
+          mediaHtml += '<img class="img-preview" src="' + escapeHtml(url) + '" alt="' + escapeHtml(a.original_name) + '">';
+        } else if (mime.startsWith('video/')) {
+          mediaHtml += '<video class="video-preview" src="' + escapeHtml(url) + '" controls></video>';
+        } else {
+          chipHtml += '<a class="attachment-chip" href="' + escapeHtml(url) + '" download="' + escapeHtml(a.original_name) + '">' + escapeHtml(a.original_name) + '</a>';
+        }
+      });
+      if (mediaHtml) {
+        // Insert media into msg-content area
+        html = html.replace('</div><!-- end-content -->', mediaHtml + '</div>');
+        // Actually, just append after content
+      }
+      if (mediaHtml) html += mediaHtml;
+      if (chipHtml) html += '<div class="msg-attachments">' + chipHtml + '</div>';
+    }
+
+    // Action items
+    if (m.action_items && m.action_items.length) {
+      html += '<div class="action-items">';
+      m.action_items.forEach(ai => {
+        const checked = ai.completed ? ' checked' : '';
+        const completedClass = ai.completed ? ' completed' : '';
+        html += '<div class="action-item' + completedClass + '">' +
+          '<input type="checkbox"' + checked + ' onchange="window.__toggleActionItem(' + ai.id + ', this.checked)">' +
+          '<label>' + escapeHtml(ai.title) + '</label></div>';
+      });
+      html += '</div>';
+    }
+
+    // Metadata
+    if (m.metadata && Object.keys(m.metadata).length) {
+      html += '<details class="msg-metadata"><summary>metadata</summary>' +
+        '<pre>' + escapeHtml(JSON.stringify(m.metadata, null, 2)) + '</pre></details>';
+    }
+
+    // Thread indicator
+    if (m.reply_count && m.reply_count > 0) {
+      html += '<div class="thread-indicator" onclick="window.__openThread(' + m.id + ')">' +
+        '<span class="thread-count">' + m.reply_count + '</span> replies</div>';
+    }
+
+    // Actions
+    html += '<div class="msg-actions">' +
+      '<button onclick="window.__openThread(' + m.id + ')">Reply</button>' +
+      '</div>';
+
+    div.innerHTML = html;
+    return div;
+  }
+
+  async function toggleActionItem(id, checked) {
+    try {
+      await fetch(API + '/action-items/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: checked })
+      });
+      await loadMessages(true);
+      pollActionCount();
+    } catch (e) { console.error('toggleActionItem', e); }
+  }
+  window.__toggleActionItem = toggleActionItem;
+
+  // ===== Thread Functions =====
+  async function openThread(messageId) {
+    state.activeThread = messageId;
+    // Switch to thread tab
+    document.querySelectorAll('.right-panel-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.panel === 'thread');
+    });
+    membersView.style.display = 'none';
+    threadView.style.display = 'flex';
+    threadView.classList.add('visible');
+    await loadThread(messageId);
+  }
+  window.__openThread = openThread;
+
+  async function loadThread(messageId) {
+    try {
+      const res = await fetch(API + '/messages/' + messageId + '/thread');
+      const data = await res.json();
+      state.threadMessages = Array.isArray(data) ? data : (data.replies || []);
+      // Find parent message
+      const parent = state.messages.find(m => m.id === messageId);
+      if (parent) {
+        threadParentAuthor.textContent = parent.author_name || '--';
+      }
+      renderThread();
+    } catch (e) { console.error('loadThread', e); }
+  }
+
+  function renderThread() {
+    threadMessages.innerHTML = state.threadMessages.map(m => {
+      const typeClass = m.author_type === 'agent' ? 'agent' : 'human';
+      return '<div class="msg-group" style="padding:6px 8px;">' +
+        '<div class="msg-head">' +
+        '<span class="msg-author ' + typeClass + '">' + escapeHtml(m.author_name) + '</span>' +
+        '<span class="msg-time">' + formatTime(m.created_at) + '</span>' +
+        '</div>' +
+        '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function sendThreadReply() {
+    if (!state.activeChannel || !state.activeThread) return;
+    const content = threadTextarea.value.trim();
+    if (!content) return;
+    const name = authorName.value.trim() || 'anonymous';
+    const type = authorType.value;
+    try {
+      await fetch(API + '/channels/' + state.activeChannel.id + '/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author_name: name,
+          author_type: type,
+          content: content,
+          thread_parent_id: state.activeThread
+        })
+      });
+      threadTextarea.value = '';
+      await loadThread(state.activeThread);
+      await loadMessages(true);
+    } catch (e) { console.error('sendThreadReply', e); }
+  }
+
+  // ===== Compose Functions =====
+  async function sendMessage() {
+    if (!state.activeChannel) return;
+    const content = composeTextarea.value.trim();
+    if (!content && state.pendingFiles.length === 0) return;
+    const name = authorName.value.trim() || 'anonymous';
+    const type = authorType.value;
+
+    // Parse action items: lines starting with [] or [ ]
+    const lines = content.split('\n');
+    const actionItems = [];
+    const contentLines = [];
+    lines.forEach(line => {
+      const match = line.match(/^\[\s?\]\s+(.+)/);
+      if (match) {
+        actionItems.push(match[1].trim());
+      } else {
+        contentLines.push(line);
+      }
+    });
+    const finalContent = contentLines.join('\n');
+
+    try {
+      if (state.pendingFiles.length > 0) {
+        // Multipart upload
+        const fd = new FormData();
+        fd.append('author_name', name);
+        fd.append('author_type', type);
+        fd.append('content', finalContent);
+        if (actionItems.length) {
+          fd.append('action_items', JSON.stringify(actionItems.map(t => ({ title: t }))));
+        }
+        state.pendingFiles.forEach(f => fd.append('files', f));
+        await fetch(API + '/channels/' + state.activeChannel.id + '/messages', {
+          method: 'POST',
+          body: fd
+        });
+      } else {
+        const body = {
+          author_name: name,
+          author_type: type,
+          content: finalContent
+        };
+        if (actionItems.length) {
+          body.action_items = actionItems.map(t => ({ title: t }));
+        }
+        await fetch(API + '/channels/' + state.activeChannel.id + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      }
+      composeTextarea.value = '';
+      state.pendingFiles = [];
+      renderFilePreview();
+      await loadMessages(true);
+      messageFeed.scrollTop = messageFeed.scrollHeight;
+      pollActionCount();
+    } catch (e) { console.error('sendMessage', e); }
+  }
+
+  function renderFilePreview() {
+    filePreviews.innerHTML = state.pendingFiles.map((f, i) =>
+      '<span class="file-tag">' + escapeHtml(f.name) +
+      '<span class="file-remove" onclick="window.__removeFile(' + i + ')">x</span></span>'
+    ).join('');
+  }
+
+  function removeFile(index) {
+    state.pendingFiles.splice(index, 1);
+    renderFilePreview();
+  }
+  window.__removeFile = removeFile;
+
+  // ===== Members =====
+  function renderMembers() {
+    const entries = Object.entries(state.members);
+    if (!entries.length) {
+      membersView.innerHTML = '<div class="member-group-label">No members yet</div>';
+      return;
+    }
+    const now = Date.now();
+    const online = [];
+    const idle = [];
+    const offline = [];
+    entries.forEach(([name, info]) => {
+      const diff = (now - new Date(info.lastSeen).getTime()) / 1000;
+      let status;
+      if (diff < 60) status = 'online';
+      else if (diff < 600) status = 'idle';
+      else status = 'offline';
+      const entry = { name, type: info.type, status };
+      if (status === 'online') online.push(entry);
+      else if (status === 'idle') idle.push(entry);
+      else offline.push(entry);
+    });
+
+    let html = '';
+    if (online.length) {
+      html += '<div class="member-group-label">Online</div>';
+      online.forEach(m => { html += memberHtml(m); });
+    }
+    if (idle.length) {
+      html += '<div class="member-group-label">Idle</div>';
+      idle.forEach(m => { html += memberHtml(m); });
+    }
+    if (offline.length) {
+      html += '<div class="member-group-label">Offline</div>';
+      offline.forEach(m => { html += memberHtml(m); });
+    }
+    membersView.innerHTML = html;
+  }
+
+  function memberHtml(m) {
+    return '<div class="member-item">' +
+      '<span class="status-dot ' + m.status + '"></span>' +
+      '<span>' + escapeHtml(m.name) + '</span>' +
+      '<span class="member-type">' + m.type + '</span></div>';
+  }
+
+  // ===== Polling =====
+  async function pollMessages() {
+    if (!state.activeChannel) return;
+    const wasAtBottom = messageFeed.scrollTop + messageFeed.clientHeight >= messageFeed.scrollHeight - 40;
+    await loadMessages(false);
+    if (wasAtBottom) {
+      messageFeed.scrollTop = messageFeed.scrollHeight;
+    }
+    // Refresh thread if open
+    if (state.activeThread) {
+      await loadThread(state.activeThread);
+    }
+  }
+
+  async function pollActionCount() {
+    try {
+      const res = await fetch(API + '/action-items?completed=false');
+      const items = await res.json();
+      statOpenItems.textContent = Array.isArray(items) ? items.length : 0;
+    } catch (e) { console.error('pollActionCount', e); }
+  }
+
+  // ===== Modal =====
+  function showModal() {
+    modalChName.value = '';
+    modalChDesc.value = '';
+    modalOverlay.classList.add('visible');
+    modalChName.focus();
+  }
+  function hideModal() {
+    modalOverlay.classList.remove('visible');
+  }
+
+  // ===== Tab Switching =====
+  function switchPanel(panel) {
+    document.querySelectorAll('.right-panel-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.panel === panel);
+    });
+    if (panel === 'members') {
+      membersView.style.display = '';
+      threadView.style.display = 'none';
+      threadView.classList.remove('visible');
+    } else {
+      membersView.style.display = 'none';
+      threadView.style.display = 'flex';
+      threadView.classList.add('visible');
+    }
+  }
+
+  // ===== Init =====
+  function init() {
+    // Restore from localStorage
+    const savedName = localStorage.getItem('comms-author');
+    const savedType = localStorage.getItem('comms-author-type');
+    if (savedName) authorName.value = savedName;
+    if (savedType) authorType.value = savedType;
+
+    // Save on change
+    authorName.addEventListener('input', () => localStorage.setItem('comms-author', authorName.value));
+    authorType.addEventListener('change', () => localStorage.setItem('comms-author-type', authorType.value));
+
+    // Enter key on compose
+    composeTextarea.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Enter key on thread
+    threadTextarea.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendThreadReply();
+      }
+    });
+
+    // File input
+    fileInput.addEventListener('change', () => {
+      Array.from(fileInput.files).forEach(f => state.pendingFiles.push(f));
+      fileInput.value = '';
+      renderFilePreview();
+    });
+    btnAttach.addEventListener('click', () => fileInput.click());
+
+    // Buttons
+    btnSend.addEventListener('click', sendMessage);
+    btnThreadSend.addEventListener('click', sendThreadReply);
+    btnNewChannel.addEventListener('click', showModal);
+    modalCancel.addEventListener('click', hideModal);
+    modalCreate.addEventListener('click', createChannel);
+
+    // Modal: close on overlay click
+    modalOverlay.addEventListener('click', e => {
+      if (e.target === modalOverlay) hideModal();
+    });
+
+    // Right panel tabs
+    document.querySelectorAll('.right-panel-tab').forEach(btn => {
+      btn.addEventListener('click', () => switchPanel(btn.dataset.panel));
+    });
+
+    // Load channels and select first
+    loadChannels().then(() => {
+      if (state.channels.length > 0) {
+        selectChannel(state.channels[0].id);
+      }
+    });
+
+    // Polling
+    setInterval(pollMessages, 3000);
+    setInterval(pollActionCount, 10000);
+    pollActionCount();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
 </script>
 </body>
 </html>
