@@ -817,6 +817,19 @@ body::before {
   opacity: 0.4;
   margin-bottom: 4px;
 }
+/* Ensure cursor-pointer on all interactive elements */
+.channel-item, .msg-actions button, .thread-indicator,
+.right-panel-tab, .action-item input[type="checkbox"] { cursor: pointer; }
+/* Focus states for keyboard nav */
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 1px;
+}
+.channel-item:focus-visible { outline: 2px solid var(--mint); outline-offset: -2px; }
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
 </style>
 </head>
 <body>
@@ -870,7 +883,7 @@ body::before {
         </select>
       </div>
       <div class="compose-bottom">
-        <button class="btn-attach" id="btn-attach" title="Attach file">&#x1F4CE;</button>
+        <button class="btn-attach" id="btn-attach" title="Attach file" aria-label="Attach file">+</button>
         <input type="file" id="file-input" multiple>
         <textarea id="compose-textarea" placeholder="Type a message..." rows="1"></textarea>
         <button class="btn-send" id="btn-send">Send</button>
