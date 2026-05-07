@@ -812,7 +812,6 @@ let state = {
   benchRunning: false,
   inferAbort: null,
   benchResults: [],
-  log: [],
   provider: 'ollama',        // 'ollama' | 'openrouter'
   modelFilter: 'all',        // 'all' | 'free' | 'coding'
   openrouterMeta: {},         // id -> {free, coding, context_length, description}
@@ -872,6 +871,8 @@ function toast(msg, type='ok') {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.className = '', 2200);
 }
+
+function esc(s) { return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
 
 function logEvent(msg, level='info') {
   const colors = { info: 'var(--text2)', warn: 'var(--amber)', error: 'var(--red)', ok: 'var(--green)' };
@@ -1092,7 +1093,7 @@ function renderModelList(filter='') {
       return `
       <div class="model-card" onclick="selectModel('${escapedName}')" title="${(orMeta.description||'').replace(/"/g,'&quot;').substring(0,200)}">
         <div style="padding-right:60px;">
-          <div class="model-name" style="font-size:10px;">${displayName}</div>
+          <div class="model-name" style="font-size:10px;">${esc(displayName)}</div>
           <div class="model-meta">
             ${orMeta.free ? '<span class="tag free">FREE</span>' : ''}
             ${orMeta.coding ? '<span class="tag coding">code</span>' : ''}
@@ -1184,9 +1185,11 @@ function populateInferSelect() {
 
 function populateBenchCheckboxes() {
   const el = document.getElementById('bench-checkboxes');
-  el.innerHTML = state.models.map(m => `
+  // Limit to 20 models for OpenRouter (hundreds of models makes bench impractical)
+  const models = isOpenRouter() ? state.models.slice(0, 20) : state.models;
+  el.innerHTML = models.map(m => `
     <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);cursor:pointer;background:var(--bg2);border:1px solid var(--border);padding:3px 8px;border-radius:var(--radius);">
-      <input type="checkbox" value="${m.name}" style="accent-color:var(--green);" checked> ${m.name.replace(':latest','')}
+      <input type="checkbox" value="${esc(m.name)}" style="accent-color:var(--green);" checked> ${esc(m.displayName || m.name).replace(':latest','')}
     </label>
   `).join('');
 }
@@ -1208,7 +1211,8 @@ function selectModelAndRun(name) {
   document.getElementById('infer-prompt').focus();
 }
 
-function filterModels(q) { renderModelList(q); }
+let _filterTimer;
+function filterModels(q) { clearTimeout(_filterTimer); _filterTimer = setTimeout(() => renderModelList(q), 150); }
 
 function setModelFilter(filter, btn) {
   state.modelFilter = filter;
@@ -1273,6 +1277,8 @@ async function runInfer() {
         signal: ctrl.signal
       });
     }
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text().catch(() => 'unknown error')}`);
 
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
@@ -1541,6 +1547,8 @@ async function sendChat() {
       });
     }
 
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text().catch(() => 'unknown error')}`);
+
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
 
@@ -1581,7 +1589,6 @@ async function sendChat() {
 
     bubble.classList.remove('streaming');
     chatHistory.push({ role: 'assistant', content: fullText });
-    const maxTurns = parseInt(document.getElementById('chat-max-turns').value) || 20;
     const currentTurns = chatHistory.filter(m=>m.role==='user').length;
     document.getElementById('chat-turns').textContent = currentTurns;
     const turnsEl = document.getElementById('chat-turns');
