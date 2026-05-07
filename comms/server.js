@@ -32,6 +32,8 @@ app.get('/', (req, res) => res.redirect('/comms.html'));
 
 // Serve static UI
 app.use(express.static(__dirname));
+// Also serve parent directory (dashboard)
+app.use(express.static(path.join(__dirname, '..')));
 
 // Serve uploads
 app.use('/uploads', express.static(uploadsDir));
