@@ -97,7 +97,7 @@
   /* LAYOUT */
   #app {
     display: grid;
-    grid-template-columns: 280px 1fr 300px;
+    grid-template-columns: 220px 1fr 260px;
     grid-template-rows: auto 1fr;
     height: calc(100vh - 49px);
     gap: 0;
@@ -183,22 +183,22 @@
   /* VRAM / STATUS GRID */
   .stat-grid {
     display: grid; grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px; padding: 12px;
+    gap: 6px; padding: 8px 12px;
   }
   .stat-box {
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px 14px;
+    border-radius: var(--radius); padding: 6px 10px;
   }
-  .stat-box .s-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text3); }
-  .stat-box .s-value { font-size: 22px; font-weight: 600; margin-top: 2px; line-height: 1; }
-  .stat-box .s-sub { font-size: 10px; color: var(--text3); margin-top: 3px; }
+  .stat-box .s-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text3); }
+  .stat-box .s-value { font-size: 16px; font-weight: 600; margin-top: 1px; line-height: 1; }
+  .stat-box .s-sub { font-size: 9px; color: var(--text3); margin-top: 2px; }
   .s-value.green { color: var(--green); }
   .s-value.amber { color: var(--amber); }
   .s-value.red { color: var(--red); }
   .s-value.blue { color: var(--blue); }
 
   /* VRAM BAR */
-  .vram-section { padding: 0 12px 12px; }
+  .vram-section { padding: 0 12px 6px; }
   .vram-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px; color: var(--text2); }
   .vram-bar {
     height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden;
@@ -212,7 +212,7 @@
   .vram-fill.danger { background: linear-gradient(90deg, #c0392b, var(--red)); }
 
   /* RUNNING MODELS */
-  .running-section { padding: 0 12px 12px; }
+  .running-section { padding: 0 12px 6px; }
   .running-section .sec-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text3); margin-bottom: 8px; }
   .running-model-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -251,7 +251,7 @@
     white-space: pre-wrap; word-break: break-word;
     border-bottom: 1px solid var(--border);
     font-family: var(--mono);
-    min-height: 200px;
+    min-height: 100px;
   }
   #infer-output::-webkit-scrollbar { width: 4px; }
   #infer-output::-webkit-scrollbar-thumb { background: var(--border2); }
