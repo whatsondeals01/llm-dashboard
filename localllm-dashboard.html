@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalLLM · Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --bg1: #10131a;
+    --bg2: #161b24;
+    --bg3: #1c2330;
+    --border: #232c3d;
+    --border2: #2e3d54;
+    --text: #c8d6e8;
+    --text2: #7a8fa8;
+    --text3: #4a5a72;
+    --green: #00e5a0;
+    --green2: #00a870;
+    --amber: #f5a623;
+    --amber2: #c47a10;
+    --red: #ff4560;
+    --blue: #3d9fe8;
+    --purple: #9b6dff;
+    --cyan: #00d4d4;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --radius: 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* TOP BAR */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  #topbar .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 600; letter-spacing: 0.08em;
+    color: var(--green);
+  }
+  #topbar .brand span { color: var(--text2); font-weight: 300; }
+  .pulse-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .pulse-dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .pulse-dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+  #topbar .meta {
+    display: flex; gap: 24px; align-items: center;
+  }
+  .meta-item { display: flex; flex-direction: column; align-items: flex-end; }
+  .meta-item .label { color: var(--text3); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .meta-item .value { color: var(--text); font-size: 12px; }
+
+  #topbar .controls { display: flex; gap: 8px; align-items: center; }
+  input.endpoint-input {
+    background: var(--bg2); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 5px 10px; border-radius: var(--radius);
+    width: 210px; outline: none;
+  }
+  input.endpoint-input:focus { border-color: var(--green2); }
+  button.btn {
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--text2); font-family: var(--mono); font-size: 11px;
+    padding: 5px 12px; border-radius: var(--radius);
+    cursor: pointer; letter-spacing: 0.05em; transition: all 0.15s;
+  }
+  button.btn:hover { border-color: var(--green); color: var(--green); }
+  button.btn.primary {
+    border-color: var(--green2); color: var(--green); background: rgba(0,229,160,0.06);
+  }
+  button.btn.primary:hover { background: rgba(0,229,160,0.14); }
+  button.btn.danger { border-color: var(--red); color: var(--red); }
+  button.btn.amber { border-color: var(--amber); color: var(--amber); }
+
+  /* LAYOUT */
+  #app {
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 49px);
+    gap: 0;
+  }
+
+  /* PANELS */
+  .panel {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+  .panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg1); flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--text2); font-weight: 500;
+  }
+  .panel-badge {
+    background: var(--bg3); border: 1px solid var(--border2);
+    color: var(--text3); font-size: 9px; padding: 1px 6px;
+    border-radius: 10px;
+  }
+  .panel-body {
+    flex: 1; overflow-y: auto; padding: 12px;
+  }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* LEFT: MODEL LIBRARY */
+  #panel-models { grid-row: 1 / 3; }
+  .model-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .model-card:hover { border-color: var(--border2); background: var(--bg2); }
+  .model-card.active { border-color: var(--green2); background: rgba(0,229,160,0.04); }
+  .model-card.running { border-color: var(--amber2); }
+  .model-name {
+    font-size: 12px; font-weight: 500; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .model-meta { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
+  .tag {
+    font-size: 9px; padding: 1px 6px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .tag.size { background: rgba(61,159,232,0.12); color: var(--blue); border: 1px solid rgba(61,159,232,0.2); }
+  .tag.quant { background: rgba(155,109,255,0.12); color: var(--purple); border: 1px solid rgba(155,109,255,0.2); }
+  .tag.family { background: rgba(245,166,35,0.1); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+  .tag.running { background: rgba(245,166,35,0.15); color: var(--amber); border: 1px solid var(--amber2); }
+  .tag.loaded { background: rgba(0,229,160,0.1); color: var(--green); border: 1px solid var(--green2); }
+  .model-run-btn {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .model-card:hover .model-run-btn { opacity: 1; }
+  #model-search {
+    width: 100%; background: var(--bg2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 7px 10px; border-radius: var(--radius); outline: none;
+    margin-bottom: 10px;
+  }
+  #model-search:focus { border-color: var(--green2); }
+
+  /* CENTER: MAIN AREA (top = status, bottom = inference) */
+  #center-top {
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  #center-bottom { display: flex; flex-direction: column; }
+
+  /* VRAM / STATUS GRID */
+  .stat-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px; padding: 12px;
+  }
+  .stat-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px;
+  }
+  .stat-box .s-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text3); }
+  .stat-box .s-value { font-size: 22px; font-weight: 600; margin-top: 2px; line-height: 1; }
+  .stat-box .s-sub { font-size: 10px; color: var(--text3); margin-top: 3px; }
+  .s-value.green { color: var(--green); }
+  .s-value.amber { color: var(--amber); }
+  .s-value.red { color: var(--red); }
+  .s-value.blue { color: var(--blue); }
+
+  /* VRAM BAR */
+  .vram-section { padding: 0 12px 12px; }
+  .vram-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px; color: var(--text2); }
+  .vram-bar {
+    height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden;
+    position: relative;
+  }
+  .vram-fill {
+    height: 100%; border-radius: 3px; transition: width 0.5s ease;
+    background: linear-gradient(90deg, var(--green2), var(--green));
+  }
+  .vram-fill.warn { background: linear-gradient(90deg, var(--amber2), var(--amber)); }
+  .vram-fill.danger { background: linear-gradient(90deg, #c0392b, var(--red)); }
+
+  /* RUNNING MODELS */
+  .running-section { padding: 0 12px 12px; }
+  .running-section .sec-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text3); margin-bottom: 8px; }
+  .running-model-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 10px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 4px;
+  }
+  .running-model-row .rm-name { font-size: 11px; color: var(--amber); }
+  .running-model-row .rm-meta { font-size: 10px; color: var(--text3); }
+  .unload-btn {
+    background: transparent; border: 1px solid rgba(255,69,96,0.3);
+    color: var(--red); font-size: 9px; padding: 2px 7px;
+    border-radius: 2px; cursor: pointer; font-family: var(--mono);
+    opacity: 0.7; transition: opacity 0.15s;
+  }
+  .unload-btn:hover { opacity: 1; }
+
+  /* INFERENCE PLAYGROUND */
+  #panel-infer { display: flex; flex-direction: column; overflow: hidden; }
+  #infer-controls {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: var(--bg1);
+  }
+  .infer-select {
+    background: var(--bg2); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 5px 8px; border-radius: var(--radius); outline: none; flex: 1; min-width: 120px;
+  }
+  .infer-select:focus { border-color: var(--green2); }
+  #infer-body {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+  #infer-output {
+    flex: 1; overflow-y: auto; padding: 12px 14px;
+    font-size: 12px; line-height: 1.7; color: var(--text);
+    white-space: pre-wrap; word-break: break-word;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    min-height: 120px;
+  }
+  #infer-output::-webkit-scrollbar { width: 4px; }
+  #infer-output::-webkit-scrollbar-thumb { background: var(--border2); }
+  .infer-placeholder { color: var(--text3); font-style: italic; }
+  .infer-thinking { color: var(--text3); animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  #infer-prompt-area {
+    padding: 10px 12px; display: flex; gap: 8px;
+    background: var(--bg1); flex-shrink: 0;
+  }
+  #infer-prompt {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    padding: 8px 10px; border-radius: var(--radius); outline: none;
+    resize: none; line-height: 1.5; min-height: 60px; max-height: 120px;
+  }
+  #infer-prompt:focus { border-color: var(--green2); }
+  .infer-stats {
+    padding: 6px 14px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 16px; background: var(--bg1);
+    flex-shrink: 0;
+  }
+  .infer-stat { display: flex; flex-direction: column; }
+  .infer-stat .is-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; }
+  .infer-stat .is-value { font-size: 13px; color: var(--green); font-weight: 500; }
+  .infer-stat .is-value.na { color: var(--text3); }
+
+  /* RIGHT: REFERENCE */
+  #panel-right { grid-row: 1 / 3; border-left: 1px solid var(--border); border-right: none; }
+  .ref-section { margin-bottom: 16px; }
+  .ref-section h4 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--text3); margin-bottom: 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cmd-row {
+    display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start;
+  }
+  .cmd { 
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--cyan); font-size: 10px; padding: 2px 7px;
+    border-radius: 2px; white-space: nowrap; cursor: pointer;
+    transition: border-color 0.1s; flex-shrink: 0;
+  }
+  .cmd:hover { border-color: var(--cyan); }
+  .cmd-desc { font-size: 10px; color: var(--text2); line-height: 1.4; }
+  .tip-row {
+    padding: 6px 8px; background: var(--bg2); border-left: 2px solid var(--border2);
+    margin-bottom: 4px; font-size: 10px; color: var(--text2); line-height: 1.4;
+  }
+  .tip-row.warn { border-left-color: var(--amber); }
+  .tip-row.good { border-left-color: var(--green); }
+  .tip-row.info { border-left-color: var(--blue); }
+  .model-rec-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 8px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 4px;
+  }
+  .model-rec-row .mr-name { font-size: 11px; color: var(--text); }
+  .model-rec-row .mr-use { font-size: 9px; color: var(--text3); }
+  .model-rec-row .mr-perf { font-size: 10px; color: var(--amber); }
+
+  /* BENCHMARK */
+  #bench-results { padding: 10px; }
+  .bench-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px; padding: 6px 8px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .bench-name { flex: 1; font-size: 11px; color: var(--text); }
+  .bench-bar-wrap { width: 100px; background: var(--bg3); height: 4px; border-radius: 2px; overflow: hidden; }
+  .bench-bar-fill { height: 100%; background: var(--green); border-radius: 2px; }
+  .bench-tps { font-size: 11px; color: var(--green); width: 60px; text-align: right; }
+  .bench-status { font-size: 10px; color: var(--text3); }
+
+  /* TOAST */
+  #toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--bg2); border: 1px solid var(--green2);
+    color: var(--green); padding: 8px 16px; border-radius: var(--radius);
+    font-size: 11px; z-index: 999; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+  #toast.error { border-color: var(--red); color: var(--red); }
+
+  /* TABS */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg1); flex-shrink: 0; }
+  .tab {
+    padding: 8px 16px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text3); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.15s;
+  }
+  .tab.active { color: var(--green); border-bottom-color: var(--green); }
+  .tab:hover:not(.active) { color: var(--text2); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* Scrollbar global */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .empty-state { color: var(--text3); text-align: center; padding: 24px 12px; font-size: 11px; }
+  .spinner {
+    display: inline-block; width: 10px; height: 10px;
+    border: 1px solid var(--border2); border-top-color: var(--green);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .nowrap { white-space: nowrap; }
+
+  /* CHAT */
+  #chat-messages {
+    flex: 1; overflow-y: auto; padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #chat-messages::-webkit-scrollbar { width: 4px; }
+  #chat-messages::-webkit-scrollbar-thumb { background: var(--border2); }
+  .msg {
+    max-width: 88%; padding: 9px 13px; border-radius: var(--radius);
+    font-size: 12px; line-height: 1.65; word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: rgba(61,159,232,0.12); border: 1px solid rgba(61,159,232,0.22);
+    color: var(--text);
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--bg2); border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .msg.assistant.streaming { border-color: var(--green2); }
+  .msg-meta {
+    font-size: 9px; color: var(--text3); margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .msg-wrap { display: flex; flex-direction: column; max-width: 88%; }
+  .msg-wrap.user { align-self: flex-end; align-items: flex-end; }
+  .msg-wrap.assistant { align-self: flex-start; align-items: flex-start; }
+  #chat-input-area {
+    padding: 10px 12px; display: flex; gap: 8px;
+    background: var(--bg1); flex-shrink: 0;
+  }
+  #chat-input {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    padding: 8px 10px; border-radius: var(--radius); outline: none;
+    resize: none; line-height: 1.5; min-height: 60px; max-height: 140px;
+  }
+  #chat-input:focus { border-color: var(--green2); }
+  #chat-controls {
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center;
+    background: var(--bg1); flex-shrink: 0; flex-wrap: wrap;
+  }
+  #chat-sysprompt {
+    flex: 1; min-width: 150px; background: var(--bg2); border: 1px solid var(--border);
+    color: var(--text2); font-family: var(--mono); font-size: 10px;
+    padding: 5px 8px; border-radius: var(--radius); outline: none;
+  }
+  #chat-sysprompt:focus { border-color: var(--border2); color: var(--text); }
+  .chat-stat { font-size: 10px; color: var(--text3); white-space: nowrap; }
+  .chat-stat span { color: var(--text2); }
+
+  /* Center layout */
+  #center-col {
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  #center-top-section { flex-shrink: 0; border-bottom: 1px solid var(--border); }
+  #center-tabs-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="brand">
+    <div class="pulse-dot" id="status-dot"></div>
+    LOCAL&nbsp;<span>LLM</span>&nbsp;CTRL
+  </div>
+  <div class="meta">
+    <div class="meta-item">
+      <span class="label">Host</span>
+      <span class="value" id="meta-version">—</span>
+    </div>
+    <div class="meta-item">
+      <span class="label">Models</span>
+      <span class="value" id="meta-models">—</span>
+    </div>
+    <div class="meta-item">
+      <span class="label">Running</span>
+      <span class="value" id="meta-running">—</span>
+    </div>
+    <div class="meta-item">
+      <span class="label">Est. VRAM</span>
+      <span class="value" id="meta-vram">—</span>
+    </div>
+  </div>
+  <div class="controls">
+    <input class="endpoint-input" id="endpoint-input" value="http://localhost:11434" placeholder="http://localhost:11434">
+    <button class="btn primary" onclick="refreshAll()">⟳ Refresh</button>
+    <button class="btn" onclick="runBenchmark()">⚡ Bench</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+
+  <!-- LEFT: MODEL LIBRARY -->
+  <div class="panel" id="panel-models">
+    <div class="panel-header">
+      <span class="panel-title">Model Library</span>
+      <span class="panel-badge" id="model-count-badge">0</span>
+    </div>
+    <div class="panel-body">
+      <input type="text" id="model-search" placeholder="filter models…" oninput="filterModels(this.value)">
+      <div id="model-list">
+        <div class="empty-state">Connect to Ollama to see models</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="panel" id="center-col" style="border-right:1px solid var(--border);">
+    <!-- Status Section -->
+    <div id="center-top-section">
+      <div class="panel-header">
+        <span class="panel-title">System Status</span>
+        <span id="last-refresh" style="font-size:9px;color:var(--text3);">never</span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="s-label">VRAM Total</div>
+          <div class="s-value green" id="s-vram-total">16 GB</div>
+          <div class="s-sub">RTX 5060 Ti</div>
+        </div>
+        <div class="stat-box">
+          <div class="s-label">VRAM Used</div>
+          <div class="s-value amber" id="s-vram-used">—</div>
+          <div class="s-sub" id="s-vram-pct">models loaded</div>
+        </div>
+        <div class="stat-box">
+          <div class="s-label">RAM</div>
+          <div class="s-value blue" id="s-ram">32 GB</div>
+          <div class="s-sub">DDR5 · SER9 Pro</div>
+        </div>
+      </div>
+      <div class="vram-section">
+        <div class="vram-label">
+          <span>VRAM Pressure</span>
+          <span id="vram-pct-label">0%</span>
+        </div>
+        <div class="vram-bar"><div class="vram-fill" id="vram-bar-fill" style="width:0%"></div></div>
+      </div>
+      <div class="running-section">
+        <div class="sec-title">Loaded Models</div>
+        <div id="running-models-list">
+          <div class="empty-state" style="padding:8px 0;text-align:left;">None loaded</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs: Inference / Benchmark -->
+    <div id="center-tabs-section">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('infer')">Inference</div>
+        <div class="tab" onclick="switchTab('chat')">Chat</div>
+        <div class="tab" onclick="switchTab('bench')">Benchmark</div>
+        <div class="tab" onclick="switchTab('log')">Event Log</div>
+      </div>
+
+      <!-- INFERENCE TAB -->
+      <div class="tab-panel active" id="tab-infer" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+        <div id="infer-controls">
+          <select class="infer-select" id="infer-model" style="flex:2;">
+            <option value="">— select model —</option>
+          </select>
+          <select class="infer-select" id="infer-temp" style="flex:0;width:85px;">
+            <option value="0.1">T=0.1</option>
+            <option value="0.3">T=0.3</option>
+            <option value="0.7" selected>T=0.7</option>
+            <option value="1.0">T=1.0</option>
+          </select>
+          <button class="btn danger" onclick="stopInfer()" id="stop-btn" style="display:none;">■ Stop</button>
+        </div>
+        <div class="infer-stats">
+          <div class="infer-stat">
+            <span class="is-label">Tok/s</span>
+            <span class="is-value na" id="is-tps">—</span>
+          </div>
+          <div class="infer-stat">
+            <span class="is-label">Tokens</span>
+            <span class="is-value na" id="is-tokens">—</span>
+          </div>
+          <div class="infer-stat">
+            <span class="is-label">TTFT</span>
+            <span class="is-value na" id="is-ttft">—</span>
+          </div>
+          <div class="infer-stat">
+            <span class="is-label">Total</span>
+            <span class="is-value na" id="is-total">—</span>
+          </div>
+          <div class="infer-stat">
+            <span class="is-label">Status</span>
+            <span class="is-value na" id="is-status">idle</span>
+          </div>
+        </div>
+        <div id="infer-output"><span class="infer-placeholder">Select a model and type a prompt below…</span></div>
+        <div id="infer-prompt-area">
+          <textarea id="infer-prompt" placeholder="Prompt (Shift+Enter for newline, Enter to send)…" rows="3"></textarea>
+          <button class="btn primary" onclick="runInfer()" style="align-self:flex-end;">▶ Run</button>
+        </div>
+      </div>
+
+      <!-- CHAT TAB -->
+      <div class="tab-panel" id="tab-chat" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+        <div id="chat-controls">
+          <select class="infer-select" id="chat-model" style="flex:1;min-width:140px;">
+            <option value="">— select model —</option>
+          </select>
+          <input id="chat-sysprompt" placeholder="System prompt (optional)…" value="You are a helpful assistant.">
+          <div class="chat-stat">Turns: <span id="chat-turns">0</span></div>
+          <div class="chat-stat">Tok/s: <span id="chat-tps">—</span></div>
+          <div class="chat-stat" style="display:flex;align-items:center;gap:4px;">
+            Max:
+            <input id="chat-max-turns" type="number" value="20" min="1" max="200"
+              style="width:46px;background:var(--bg2);border:1px solid var(--border);color:var(--text);
+                     font-family:var(--mono);font-size:11px;padding:3px 5px;border-radius:var(--radius);outline:none;text-align:center;">
+            turns
+          </div>
+          <button class="btn amber" onclick="clearChat()">✕ Clear</button>
+          <button class="btn danger" onclick="stopChat()" id="chat-stop-btn" style="display:none;">■ Stop</button>
+        </div>
+        <div id="chat-messages">
+          <div style="color:var(--text3);font-size:11px;text-align:center;padding:20px;">Select a model and start chatting. Full multi-turn history sent each request.</div>
+        </div>
+        <div id="chat-input-area">
+          <textarea id="chat-input" placeholder="Message (Enter to send, Shift+Enter for newline)…" rows="3"></textarea>
+          <button class="btn primary" onclick="sendChat()" style="align-self:flex-end;">▶ Send</button>
+        </div>
+      </div>
+
+      <!-- BENCHMARK TAB -->
+      <div class="tab-panel" id="tab-bench" style="overflow-y:auto;">
+        <div style="padding:12px;">
+          <div style="color:var(--text2);font-size:11px;margin-bottom:12px;line-height:1.6;">
+            Runs a standard prompt across all (or selected) models, measures tok/s and TTFT. Click <strong style="color:var(--amber);">⚡ Bench</strong> in top bar to start.
+          </div>
+          <div id="bench-model-select" style="margin-bottom:10px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);margin-bottom:6px;">Select models to bench</div>
+            <div id="bench-checkboxes" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+          <div style="margin-bottom:10px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);margin-bottom:6px;">Benchmark prompt</div>
+            <textarea id="bench-prompt" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:8px;border-radius:var(--radius);resize:vertical;outline:none;min-height:60px;">Explain the difference between RLHF and DPO in 3 sentences.</textarea>
+          </div>
+          <button class="btn primary" onclick="runBenchmark()">⚡ Run Benchmark</button>
+        </div>
+        <div id="bench-results"></div>
+      </div>
+
+      <!-- LOG TAB -->
+      <div class="tab-panel" id="tab-log" style="overflow-y:auto;">
+        <div id="log-output" style="padding:10px;font-size:10px;line-height:1.8;color:var(--text2);">
+          <div style="color:var(--text3);">Event log initialized.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: REFERENCE PANEL -->
+  <div class="panel" id="panel-right" style="border-right:none;">
+    <div class="panel-header">
+      <span class="panel-title">Reference</span>
+    </div>
+    <div class="panel-body">
+
+      <!-- Hardware Profile -->
+      <div class="ref-section">
+        <h4>Hardware · SER9 Pro</h4>
+        <div class="model-rec-row">
+          <div>
+            <div class="mr-name">CPU</div>
+            <div class="mr-use">Ryzen AI 9 HX 375 / R7 H255</div>
+          </div>
+          <div class="mr-perf">32GB DDR5</div>
+        </div>
+        <div class="model-rec-row">
+          <div>
+            <div class="mr-name">GPU</div>
+            <div class="mr-use">RTX 5060 Ti · ext VRAM</div>
+          </div>
+          <div class="mr-perf">16 GB</div>
+        </div>
+        <div class="tip-row info">Max practical model: ~13B Q8 or 30B Q4 (fits 16GB VRAM). 70B requires offload → slow.</div>
+        <div class="tip-row warn">eGPU bottleneck: Thunderbolt 4 bandwidth caps throughput ~30–40% vs desktop PCIe x16. Real tok/s ~60–70% of native.</div>
+      </div>
+
+      <!-- Model Recommendations -->
+      <div class="ref-section">
+        <h4>Recommended Models (your rig)</h4>
+        <div class="model-rec-row">
+          <div><div class="mr-name">qwen3:14b</div><div class="mr-use">TLT DCF · reasoning</div></div>
+          <div class="mr-perf">~30 t/s</div>
+        </div>
+        <div class="model-rec-row">
+          <div><div class="mr-name">qwen2.5:14b-65k</div><div class="mr-use">Long ctx · analysis</div></div>
+          <div class="mr-perf">~28 t/s</div>
+        </div>
+        <div class="model-rec-row">
+          <div><div class="mr-name">qwen3:8b</div><div class="mr-use">Fast · batch triage</div></div>
+          <div class="mr-perf">~55 t/s</div>
+        </div>
+        <div class="model-rec-row">
+          <div><div class="mr-name">gemma3:12b</div><div class="mr-use">KidSmart · multimodal</div></div>
+          <div class="mr-perf">~32 t/s</div>
+        </div>
+        <div class="model-rec-row">
+          <div><div class="mr-name">llama3.2:3b</div><div class="mr-use">Ultra-fast · triage</div></div>
+          <div class="mr-perf">~120 t/s</div>
+        </div>
+        <div class="tip-row good">Dual model: keep qwen3:8b hot for latency-sensitive, load 14b for quality tasks.</div>
+      </div>
+
+      <!-- Ollama Commands -->
+      <div class="ref-section">
+        <h4>Ollama CLI</h4>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('ollama ps')">ollama ps</span>
+          <span class="cmd-desc">running models + VRAM</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('ollama list')">ollama list</span>
+          <span class="cmd-desc">all local models</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('OLLAMA_MAX_LOADED_MODELS=2 ollama serve')">MAX_LOADED=2</span>
+          <span class="cmd-desc">allow 2 hot models</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('OLLAMA_KEEP_ALIVE=30m ollama serve')">KEEP_ALIVE</span>
+          <span class="cmd-desc">keep model in VRAM 30m</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('ollama run qwen3:14b --keepalive 0')">--keepalive 0</span>
+          <span class="cmd-desc">unload immediately after</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('nvidia-smi --query-gpu=memory.used,memory.total,temperature.gpu,utilization.gpu --format=csv -l 2')">nvidia-smi</span>
+          <span class="cmd-desc">live VRAM + temp + util</span>
+        </div>
+      </div>
+
+      <!-- OpenClaw -->
+      <div class="ref-section">
+        <h4>OpenClaw Quick Ref</h4>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('openclaw config set')">config set</span>
+          <span class="cmd-desc">always use this, not nano</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('pkill -9 -f openclaw; sleep 3; systemctl --user start openclaw-gateway.service')">nuke restart</span>
+          <span class="cmd-desc">nuclear restart sequence</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('openclaw status')">status</span>
+          <span class="cmd-desc">check gateway health</span>
+        </div>
+        <div class="tip-row warn">Never edit ~/.openclaw/*.json manually. Use CLI commands only.</div>
+        <div class="tip-row info">Bot token rotation: update Telegram webhook if token exposed.</div>
+      </div>
+
+      <!-- Claude Code -->
+      <div class="ref-section">
+        <h4>Claude Code · Power Usage</h4>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('claude --continue')">--continue</span>
+          <span class="cmd-desc">resume last session</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('claude --model claude-sonnet-4-20250514')">model</span>
+          <span class="cmd-desc">pin to specific model</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('/compact')">compact</span>
+          <span class="cmd-desc">compress context, save tokens</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd" onclick="copyCmd('claude --dangerously-skip-permissions -p \"task\"')">skip-perms</span>
+          <span class="cmd-desc">non-interactive automation</span>
+        </div>
+        <div class="tip-row good">Use CLAUDE.md in project root for persistent rules/context per repo.</div>
+        <div class="tip-row good">MCP servers: add ollama-mcp to route Claude Code → your local models.</div>
+        <div class="tip-row warn">Context window: compact aggressively on long sessions or costs spike.</div>
+      </div>
+
+      <!-- VRAM Math -->
+      <div class="ref-section">
+        <h4>VRAM Estimator</h4>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+          <input id="vram-params" type="number" value="14" min="1" max="200" style="width:60px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;border-radius:var(--radius);outline:none;">
+          <span style="color:var(--text2);font-size:11px;">B params ×</span>
+          <select id="vram-quant" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;border-radius:var(--radius);outline:none;">
+            <option value="2">Q2 (2-bit)</option>
+            <option value="4" selected>Q4 (4-bit)</option>
+            <option value="5">Q5 (5-bit)</option>
+            <option value="6">Q6 (6-bit)</option>
+            <option value="8">Q8 (8-bit)</option>
+            <option value="16">FP16</option>
+          </select>
+          <button class="btn" onclick="calcVram()" style="padding:4px 10px;">Calc</button>
+        </div>
+        <div id="vram-result" style="font-size:13px;color:var(--green);font-weight:500;min-height:20px;"></div>
+        <div id="vram-fit" style="font-size:10px;color:var(--text3);margin-top:2px;"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ==================== STATE ====================
+let state = {
+  models: [],
+  runningModels: [],
+  selectedModel: null,
+  inferring: false,
+  benchRunning: false,
+  inferAbort: null,
+  benchResults: [],
+  log: [],
+};
+
+let ENDPOINT = () => document.getElementById('endpoint-input').value.replace(/\/$/, '');
+
+// ==================== UTILS ====================
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (type === 'error' ? ' error' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = '', 2200);
+}
+
+function logEvent(msg, level='info') {
+  const colors = { info: 'var(--text2)', warn: 'var(--amber)', error: 'var(--red)', ok: 'var(--green)' };
+  const ts = new Date().toLocaleTimeString();
+  const el = document.createElement('div');
+  el.style.cssText = `color:${colors[level]||'var(--text2)'};`;
+  el.textContent = `[${ts}] ${msg}`;
+  const log = document.getElementById('log-output');
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+function copyCmd(cmd) {
+  navigator.clipboard.writeText(cmd).then(() => toast('Copied: ' + cmd.substring(0, 40)));
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '?';
+  const gb = bytes / 1e9;
+  return gb >= 1 ? gb.toFixed(1) + ' GB' : (bytes / 1e6).toFixed(0) + ' MB';
+}
+
+function parseModelMeta(model) {
+  const name = model.name || model.model || '';
+  const parts = name.replace(':latest', '').split(':');
+  const base = parts[0];
+  const tag = parts[1] || '';
+  // Detect family
+  let family = 'other';
+  if (/qwen/i.test(base)) family = 'qwen';
+  else if (/llama/i.test(base)) family = 'llama';
+  else if (/gemma/i.test(base)) family = 'gemma';
+  else if (/mistral|mixtral/i.test(base)) family = 'mistral';
+  else if (/phi/i.test(base)) family = 'phi';
+  else if (/deepseek/i.test(base)) family = 'deepseek';
+  else if (/codestral|code/i.test(base)) family = 'code';
+  // Detect quant from tag or details
+  let quant = '';
+  const qtag = (tag + ' ' + (model.details?.quantization_level || '')).toLowerCase();
+  if (/q2/i.test(qtag)) quant = 'Q2';
+  else if (/q3/i.test(qtag)) quant = 'Q3';
+  else if (/q4_k_m|q4km/i.test(qtag)) quant = 'Q4_K_M';
+  else if (/q4/i.test(qtag)) quant = 'Q4';
+  else if (/q5/i.test(qtag)) quant = 'Q5';
+  else if (/q6/i.test(qtag)) quant = 'Q6';
+  else if (/q8/i.test(qtag)) quant = 'Q8';
+  else if (/fp16|f16/i.test(qtag)) quant = 'FP16';
+  else quant = (model.details?.quantization_level || '').toUpperCase() || 'UNK';
+  return { name, base, tag, family, quant, size: model.size || 0 };
+}
+
+function estimateVram(sizeBytes) {
+  if (!sizeBytes) return null;
+  // Rough: model file size ≈ VRAM usage (already quantized)
+  return sizeBytes * 1.08; // +8% overhead
+}
+
+// ==================== API ====================
+async function api(path, opts={}) {
+  const url = ENDPOINT() + path;
+  const r = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r;
+}
+
+async function refreshAll() {
+  logEvent('Refreshing...', 'info');
+  document.getElementById('status-dot').className = 'pulse-dot amber';
+  try {
+    // Version
+    const vr = await api('/api/version');
+    const vj = await vr.json();
+    document.getElementById('meta-version').textContent = 'v' + vj.version;
+
+    // Models
+    const mr = await api('/api/tags');
+    const mj = await mr.json();
+    state.models = mj.models || [];
+    document.getElementById('meta-models').textContent = state.models.length;
+    document.getElementById('model-count-badge').textContent = state.models.length;
+    renderModelList();
+    populateInferSelect();
+    populateBenchCheckboxes();
+
+    // Running
+    await refreshRunning();
+
+    document.getElementById('status-dot').className = 'pulse-dot';
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+    logEvent(`Connected. ${state.models.length} models, ${state.runningModels.length} running.`, 'ok');
+  } catch(e) {
+    document.getElementById('status-dot').className = 'pulse-dot red';
+    document.getElementById('meta-version').textContent = 'offline';
+    logEvent('Connection failed: ' + e.message, 'error');
+    toast('Cannot reach Ollama: ' + e.message, 'error');
+  }
+}
+
+async function refreshRunning() {
+  try {
+    const pr = await api('/api/ps');
+    const pj = await pr.json();
+    state.runningModels = pj.models || [];
+    document.getElementById('meta-running').textContent = state.runningModels.length;
+    renderRunningModels();
+    updateVramDisplay();
+  } catch(e) {
+    state.runningModels = [];
+    renderRunningModels();
+  }
+}
+
+// ==================== RENDER ====================
+function renderModelList(filter='') {
+  const list = document.getElementById('model-list');
+  const filtered = filter
+    ? state.models.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
+    : state.models;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state">No models found</div>';
+    return;
+  }
+
+  // Sort by size desc
+  const sorted = [...filtered].sort((a, b) => (b.size || 0) - (a.size || 0));
+  const runningNames = new Set(state.runningModels.map(m => m.name));
+
+  list.innerHTML = sorted.map(m => {
+    const meta = parseModelMeta(m);
+    const isRunning = runningNames.has(m.name);
+    return `
+    <div class="model-card ${isRunning ? 'running' : ''}" onclick="selectModel('${m.name}')">
+      <div style="padding-right:60px;">
+        <div class="model-name">${meta.name}</div>
+        <div class="model-meta">
+          ${meta.size ? `<span class="tag size">${fmtSize(meta.size)}</span>` : ''}
+          ${meta.quant ? `<span class="tag quant">${meta.quant}</span>` : ''}
+          ${meta.family !== 'other' ? `<span class="tag family">${meta.family}</span>` : ''}
+          ${isRunning ? '<span class="tag loaded">● loaded</span>' : ''}
+        </div>
+      </div>
+      <div class="model-run-btn">
+        <button class="btn primary" style="font-size:9px;padding:3px 8px;" onclick="event.stopPropagation();selectModelAndRun('${m.name}')">▶ Use</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderRunningModels() {
+  const el = document.getElementById('running-models-list');
+  if (!state.runningModels.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:8px 0;text-align:left;color:var(--text3);">None loaded</div>';
+    return;
+  }
+  el.innerHTML = state.runningModels.map(m => {
+    const vram = m.size_vram ? fmtSize(m.size_vram) : '?';
+    return `
+    <div class="running-model-row">
+      <div>
+        <div class="rm-name">${m.name}</div>
+        <div class="rm-meta">VRAM: ${vram}</div>
+      </div>
+      <button class="unload-btn" onclick="unloadModel('${m.name}')">unload</button>
+    </div>`;
+  }).join('');
+}
+
+function updateVramDisplay() {
+  const totalVram = 16 * 1e9; // 16GB RTX 5060 Ti
+  const usedVram = state.runningModels.reduce((sum, m) => sum + (m.size_vram || 0), 0);
+  const pct = Math.min(100, (usedVram / totalVram) * 100);
+
+  const usedEl = document.getElementById('s-vram-used');
+  usedEl.textContent = usedVram > 0 ? fmtSize(usedVram) : '0 B';
+  usedEl.className = 's-value ' + (pct > 85 ? 'red' : pct > 60 ? 'amber' : 'green');
+
+  document.getElementById('s-vram-pct').textContent = usedVram > 0 ? `${pct.toFixed(1)}% used` : 'idle';
+  document.getElementById('vram-pct-label').textContent = pct.toFixed(1) + '%';
+  document.getElementById('meta-vram').textContent = usedVram > 0 ? fmtSize(usedVram) + ' used' : 'idle';
+
+  const bar = document.getElementById('vram-bar-fill');
+  bar.style.width = pct + '%';
+  bar.className = 'vram-fill' + (pct > 85 ? ' danger' : pct > 60 ? ' warn' : '');
+}
+
+function populateInferSelect() {
+  const sel = document.getElementById('infer-model');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— select model —</option>' +
+    state.models.map(m => `<option value="${m.name}" ${m.name===cur?'selected':''}>${m.name}</option>`).join('');
+  if (state.selectedModel) sel.value = state.selectedModel;
+
+  // also populate chat model select
+  const csel = document.getElementById('chat-model');
+  const ccur = csel.value;
+  csel.innerHTML = '<option value="">— select model —</option>' +
+    state.models.map(m => `<option value="${m.name}" ${m.name===ccur?'selected':''}>${m.name}</option>`).join('');
+  if (state.selectedModel) csel.value = state.selectedModel;
+}
+
+function populateBenchCheckboxes() {
+  const el = document.getElementById('bench-checkboxes');
+  el.innerHTML = state.models.map(m => `
+    <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);cursor:pointer;background:var(--bg2);border:1px solid var(--border);padding:3px 8px;border-radius:var(--radius);">
+      <input type="checkbox" value="${m.name}" style="accent-color:var(--green);" checked> ${m.name.replace(':latest','')}
+    </label>
+  `).join('');
+}
+
+// ==================== ACTIONS ====================
+function selectModel(name) {
+  state.selectedModel = name;
+  document.getElementById('infer-model').value = name;
+  document.getElementById('chat-model').value = name;
+  document.querySelectorAll('.model-card').forEach(c => {
+    c.classList.toggle('active', c.querySelector('.model-name')?.textContent === name);
+  });
+  switchTab('infer');
+  toast('Selected: ' + name);
+}
+
+function selectModelAndRun(name) {
+  selectModel(name);
+  document.getElementById('infer-prompt').focus();
+}
+
+function filterModels(q) { renderModelList(q); }
+
+async function unloadModel(name) {
+  try {
+    // Ollama: POST /api/generate with keep_alive: 0 unloads
+    await fetch(ENDPOINT() + '/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: name, keep_alive: 0 })
+    });
+    toast('Unloaded: ' + name);
+    logEvent('Unloaded: ' + name, 'warn');
+    setTimeout(refreshRunning, 1000);
+  } catch(e) {
+    toast('Unload failed: ' + e.message, 'error');
+  }
+}
+
+// ==================== INFERENCE ====================
+let inferStats = { startTime: null, firstTokenTime: null, tokenCount: 0 };
+
+async function runInfer() {
+  const model = document.getElementById('infer-model').value;
+  const prompt = document.getElementById('infer-prompt').value.trim();
+  if (!model) { toast('Select a model first', 'error'); return; }
+  if (!prompt) { toast('Enter a prompt', 'error'); return; }
+  if (state.inferring) return;
+
+  state.inferring = true;
+  document.getElementById('stop-btn').style.display = 'inline-block';
+  document.getElementById('is-status').textContent = 'loading…';
+  document.getElementById('is-status').style.color = 'var(--amber)';
+
+  const output = document.getElementById('infer-output');
+  output.innerHTML = '<span class="infer-thinking">▌ generating…</span>';
+  inferStats = { startTime: Date.now(), firstTokenTime: null, tokenCount: 0 };
+
+  const body = {
+    model,
+    prompt,
+    stream: true,
+    options: { temperature: parseFloat(document.getElementById('infer-temp').value) }
+  };
+
+  const ctrl = new AbortController();
+  state.inferAbort = ctrl;
+
+  try {
+    const resp = await fetch(ENDPOINT() + '/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let text = '';
+
+    document.getElementById('is-status').textContent = 'streaming';
+    document.getElementById('is-status').style.color = 'var(--green)';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = dec.decode(value, { stream: true }).split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const j = JSON.parse(line);
+          if (j.response) {
+            if (!inferStats.firstTokenTime) {
+              inferStats.firstTokenTime = Date.now();
+              document.getElementById('is-ttft').textContent = (inferStats.firstTokenTime - inferStats.startTime) + 'ms';
+              document.getElementById('is-ttft').className = 'is-value';
+            }
+            text += j.response;
+            inferStats.tokenCount++;
+            output.textContent = text;
+            output.scrollTop = output.scrollHeight;
+
+            // Update stats
+            const elapsed = (Date.now() - inferStats.startTime) / 1000;
+            const tps = (inferStats.tokenCount / elapsed).toFixed(1);
+            document.getElementById('is-tps').textContent = tps;
+            document.getElementById('is-tps').className = 'is-value';
+            document.getElementById('is-tokens').textContent = inferStats.tokenCount;
+            document.getElementById('is-tokens').className = 'is-value';
+            document.getElementById('is-total').textContent = elapsed.toFixed(1) + 's';
+            document.getElementById('is-total').className = 'is-value';
+          }
+          if (j.done) {
+            const finalTps = j.eval_count && j.eval_duration ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1) : null;
+            if (finalTps) {
+              document.getElementById('is-tps').textContent = finalTps;
+              logEvent(`${model}: ${finalTps} tok/s, ${j.eval_count} tokens`, 'ok');
+            }
+          }
+        } catch {}
+      }
+    }
+    document.getElementById('is-status').textContent = 'done';
+    document.getElementById('is-status').style.color = 'var(--text3)';
+    refreshRunning();
+  } catch(e) {
+    if (e.name !== 'AbortError') {
+      output.textContent = '⚠ Error: ' + e.message;
+      logEvent('Infer error: ' + e.message, 'error');
+    } else {
+      output.textContent += '\n\n[stopped]';
+    }
+    document.getElementById('is-status').textContent = 'stopped';
+    document.getElementById('is-status').style.color = 'var(--text3)';
+  }
+  state.inferring = false;
+  state.inferAbort = null;
+  document.getElementById('stop-btn').style.display = 'none';
+}
+
+function stopInfer() {
+  if (state.inferAbort) state.inferAbort.abort();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('infer-prompt').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runInfer(); }
+  });
+  document.getElementById('chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+});
+
+// ==================== BENCHMARK ====================
+async function runBenchmark() {
+  if (state.benchRunning) return;
+  switchTab('bench');
+  const checkboxes = document.querySelectorAll('#bench-checkboxes input:checked');
+  const models = Array.from(checkboxes).map(c => c.value);
+  if (!models.length) { toast('Select at least one model', 'error'); return; }
+  const prompt = document.getElementById('bench-prompt').value;
+
+  state.benchRunning = true;
+  state.benchResults = [];
+  const resultsEl = document.getElementById('bench-results');
+  resultsEl.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:11px;">Running benchmark…</div>';
+  logEvent(`Bench started: ${models.length} models`, 'info');
+
+  for (const model of models) {
+    logEvent(`Bench: ${model}`, 'info');
+    const rowId = 'bench-' + model.replace(/[^a-z0-9]/gi, '_');
+    resultsEl.innerHTML += `<div class="bench-row" id="${rowId}">
+      <div class="bench-name">${model}</div>
+      <div class="bench-status"><span class="spinner"></span></div>
+      <div class="bench-tps">—</div>
+    </div>`;
+
+    try {
+      const start = Date.now();
+      const resp = await fetch(ENDPOINT() + '/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0.1, num_predict: 80 } })
+      });
+      const j = await resp.json();
+      const elapsed = (Date.now() - start) / 1000;
+      const tps = j.eval_count && j.eval_duration
+        ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1)
+        : (j.eval_count / elapsed).toFixed(1);
+      const ttft = j.prompt_eval_duration ? (j.prompt_eval_duration / 1e6).toFixed(0) + 'ms' : '?';
+
+      state.benchResults.push({ model, tps: parseFloat(tps), ttft });
+      const row = document.getElementById(rowId);
+      if (row) row.innerHTML = `
+        <div class="bench-name">${model}</div>
+        <div style="flex:0;font-size:9px;color:var(--text3);">TTFT ${ttft}</div>
+        <div class="bench-bar-wrap"><div class="bench-bar-fill" style="width:${Math.min(100,(parseFloat(tps)/120)*100)}%"></div></div>
+        <div class="bench-tps">${tps} t/s</div>
+      `;
+      logEvent(`${model}: ${tps} tok/s, TTFT ${ttft}`, 'ok');
+    } catch(e) {
+      const row = document.getElementById(rowId);
+      if (row) row.innerHTML = `<div class="bench-name">${model}</div><div class="bench-status" style="color:var(--red);">FAILED: ${e.message}</div>`;
+      logEvent(`${model}: FAILED - ${e.message}`, 'error');
+    }
+  }
+
+  state.benchRunning = false;
+  if (state.benchResults.length > 1) {
+    const sorted = [...state.benchResults].sort((a, b) => b.tps - a.tps);
+    logEvent(`Best: ${sorted[0].model} @ ${sorted[0].tps} t/s`, 'ok');
+  }
+  toast('Benchmark complete');
+  refreshRunning();
+}
+
+// ==================== TABS ====================
+function switchTab(name) {
+  const names = ['infer', 'chat', 'bench', 'log'];
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.style.display = 'none';
+    p.classList.remove('active');
+  });
+  const active = document.getElementById('tab-' + name);
+  if (active) { active.style.display = 'flex'; active.classList.add('active'); }
+}
+
+// ==================== CHAT ====================
+let chatHistory = [];   // [{role, content}]
+let chatAbort = null;
+let chatRunning = false;
+
+function clearChat() {
+  chatHistory = [];
+  document.getElementById('chat-messages').innerHTML =
+    '<div style="color:var(--text3);font-size:11px;text-align:center;padding:20px;">Conversation cleared.</div>';
+  document.getElementById('chat-turns').textContent = '0';
+  document.getElementById('chat-tps').textContent = '—';
+  logEvent('Chat cleared', 'info');
+}
+
+function stopChat() {
+  if (chatAbort) chatAbort.abort();
+}
+
+function appendMsg(role, content, streaming=false) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap ' + role;
+  const bubble = document.createElement('div');
+  bubble.className = 'msg ' + role + (streaming ? ' streaming' : '');
+  bubble.textContent = content;
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = role === 'user' ? 'you' : (document.getElementById('chat-model').value || 'assistant');
+  wrap.appendChild(bubble);
+  wrap.appendChild(meta);
+  const msgs = document.getElementById('chat-messages');
+  // Clear placeholder if first message
+  if (msgs.querySelector('div[style]')) msgs.innerHTML = '';
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return bubble;
+}
+
+async function sendChat() {
+  if (chatRunning) return;
+  const model = document.getElementById('chat-model').value;
+  const input = document.getElementById('chat-input').value.trim();
+  if (!model) { toast('Select a model', 'error'); return; }
+  if (!input) return;
+
+  const maxTurns = parseInt(document.getElementById('chat-max-turns').value) || 20;
+  const userTurns = chatHistory.filter(m => m.role === 'user').length;
+  if (userTurns >= maxTurns) {
+    toast(`Max ${maxTurns} turns reached — clear to continue`, 'error');
+    return;
+  }
+
+  document.getElementById('chat-input').value = '';
+  appendMsg('user', input);
+  chatHistory.push({ role: 'user', content: input });
+
+  const sysprompt = document.getElementById('chat-sysprompt').value.trim();
+  const messages = sysprompt
+    ? [{ role: 'system', content: sysprompt }, ...chatHistory]
+    : [...chatHistory];
+
+  chatRunning = true;
+  document.getElementById('chat-stop-btn').style.display = 'inline-block';
+  const bubble = appendMsg('assistant', '▌', true);
+
+  const ctrl = new AbortController();
+  chatAbort = ctrl;
+
+  let fullText = '';
+  let tokenCount = 0;
+  const start = Date.now();
+
+  try {
+    const resp = await fetch(ENDPOINT() + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, stream: true, options: { temperature: 0.7 } }),
+      signal: ctrl.signal
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = dec.decode(value, { stream: true }).split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const j = JSON.parse(line);
+          if (j.message?.content) {
+            fullText += j.message.content;
+            tokenCount++;
+            bubble.textContent = fullText;
+            document.getElementById('chat-messages').scrollTop = 9999;
+            const tps = (tokenCount / ((Date.now() - start) / 1000)).toFixed(1);
+            document.getElementById('chat-tps').textContent = tps;
+          }
+          if (j.done) {
+            const finalTps = j.eval_count && j.eval_duration
+              ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1) : null;
+            if (finalTps) document.getElementById('chat-tps').textContent = finalTps;
+            logEvent(`Chat ${model}: ${finalTps||'?'} tok/s`, 'ok');
+          }
+        } catch {}
+      }
+    }
+
+    bubble.classList.remove('streaming');
+    chatHistory.push({ role: 'assistant', content: fullText });
+    const maxTurns = parseInt(document.getElementById('chat-max-turns').value) || 20;
+    const currentTurns = chatHistory.filter(m=>m.role==='user').length;
+    document.getElementById('chat-turns').textContent = currentTurns;
+    const turnsEl = document.getElementById('chat-turns');
+    turnsEl.style.color = currentTurns >= maxTurns ? 'var(--red)' : currentTurns >= maxTurns * 0.8 ? 'var(--amber)' : '';
+
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      bubble.textContent = fullText + '\n\n[stopped]';
+      if (fullText) chatHistory.push({ role: 'assistant', content: fullText });
+    } else {
+      bubble.textContent = '⚠ Error: ' + e.message;
+      bubble.style.color = 'var(--red)';
+      logEvent('Chat error: ' + e.message, 'error');
+    }
+    bubble.classList.remove('streaming');
+  }
+
+  chatRunning = false;
+  chatAbort = null;
+  document.getElementById('chat-stop-btn').style.display = 'none';
+  refreshRunning();
+}
+
+// ==================== VRAM CALC ====================
+function calcVram() {
+  const params = parseFloat(document.getElementById('vram-params').value);
+  const bits = parseFloat(document.getElementById('vram-quant').value);
+  const gb = (params * 1e9 * bits / 8) / 1e9;
+  const withOverhead = gb * 1.15;
+  const fits = withOverhead <= 16;
+  const pct = (withOverhead / 16 * 100).toFixed(0);
+  document.getElementById('vram-result').textContent = `~${withOverhead.toFixed(1)} GB needed`;
+  document.getElementById('vram-result').style.color = fits ? 'var(--green)' : 'var(--red)';
+  document.getElementById('vram-fit').textContent = fits
+    ? `✓ Fits (${pct}% of 16GB VRAM)`
+    : `✗ Exceeds 16GB — needs CPU offload (slow)`;
+}
+
+// ==================== AUTO-REFRESH ====================
+let autoRefreshInterval = null;
+function startAutoRefresh() {
+  autoRefreshInterval = setInterval(refreshRunning, 8000); // refresh running models every 8s
+}
+
+// ==================== INIT ====================
+window.addEventListener('load', () => {
+  refreshAll();
+  startAutoRefresh();
+  calcVram();
+  logEvent('Dashboard initialized. Auto-refreshing running models every 8s.', 'info');
+});
+</script>
+</body>
+</html>
