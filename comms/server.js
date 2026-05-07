@@ -26,19 +26,21 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB max
 
 app.use(cors());
-app.use(express.json());
 
-// Ollama proxy — avoids CORS issues when dashboard is served from localhost
+// Ollama proxy — MUST be before express.json() so body isn't consumed
 app.all('/ollama/*', (req, res) => {
-  const ollamaPath = req.params[0]; // everything after /ollama/
-  const ollamaUrl = new URL('/' + ollamaPath, req.headers['x-ollama-host'] || 'http://100.80.126.45:11434');
+  const ollamaPath = req.params[0];
   const options = {
-    hostname: ollamaUrl.hostname,
-    port: ollamaUrl.port || 11434,
-    path: ollamaUrl.pathname + (req._parsedUrl.search || ''),
+    hostname: '100.80.126.45',
+    port: 11434,
+    path: '/' + ollamaPath + (req._parsedUrl.search || ''),
     method: req.method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...req.headers, host: '100.80.126.45:11434' },
   };
+  // Remove hop-by-hop headers
+  delete options.headers['connection'];
+  delete options.headers['transfer-encoding'];
+
   const proxyReq = http.request(options, (proxyRes) => {
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
@@ -46,12 +48,10 @@ app.all('/ollama/*', (req, res) => {
   proxyReq.on('error', (e) => {
     res.status(502).json({ error: 'Ollama proxy error: ' + e.message });
   });
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    req.pipe(proxyReq);
-  } else {
-    proxyReq.end();
-  }
+  req.pipe(proxyReq);
 });
+
+app.use(express.json());
 
 // Redirect root to comms.html
 app.get('/', (req, res) => res.redirect('/comms.html'));
