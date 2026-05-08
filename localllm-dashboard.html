@@ -941,6 +941,8 @@ function logEvent(msg, level='info') {
   el.textContent = `[${ts}] ${msg}`;
   const log = document.getElementById('log-output');
   log.appendChild(el);
+  // Cap at 200 entries to prevent memory bloat
+  while (log.children.length > 200) log.removeChild(log.firstChild);
   log.scrollTop = log.scrollHeight;
 }
 
@@ -988,12 +990,6 @@ function parseModelMeta(model) {
   else if (/[34]b/i.test(tag) || (model.size && model.size < 5e9)) use = 'fast';
   else if (/8b/i.test(tag) || (model.size && model.size < 8e9)) use = 'general';
   return { name, base, tag, family, quant, size: model.size || 0, use };
-}
-
-function estimateVram(sizeBytes) {
-  if (!sizeBytes) return null;
-  // Rough: model file size ≈ VRAM usage (already quantized)
-  return sizeBytes * 1.08; // +8% overhead
 }
 
 // ==================== API ====================
@@ -1280,7 +1276,7 @@ function selectModel(name) {
 
 function selectModelAndRun(name) {
   selectModel(name);
-  document.getElementById('infer-prompt').focus();
+  document.getElementById('chat-input').focus();
 }
 
 let _filterTimer;
@@ -1618,7 +1614,7 @@ function showChatHistory() {
       const time = new Date(s.updated).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
       return '<div style="padding:6px 8px;margin-bottom:4px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:var(--mono);font-size:10px;" ' +
         'onclick="restoreSession(\'' + s.id + '\')">' +
-        '<div style="color:var(--green);">' + esc(s.model) + ' · ' + s.turns + ' turns · ' + s.preset + '</div>' +
+        '<div style="color:var(--green);">' + esc(s.model) + ' · ' + s.turns + ' turns · ' + esc(s.preset) + '</div>' +
         '<div style="color:var(--text3);font-size:9px;">' + date + ' ' + time + ' — ' + esc(s.preview) + '</div>' +
         '</div>';
     }).join('') +
@@ -1684,6 +1680,7 @@ function saveSysprompt() {
 let sessionStats = {
   local: { prompt: 0, completion: 0, requests: 0 },
   api: { prompt: 0, completion: 0, requests: 0 },
+  models: {},
   startTime: Date.now()
 };
 (function restoreStats() {
@@ -1892,13 +1889,9 @@ const MODEL_SIZES = {
 let _loadedModel = null; // track what's hot in VRAM
 let _pendingSwap = null; // pending model swap confirmation
 
-async function checkLoadedModel() {
-  try {
-    const r = await fetch(ENDPOINT() + '/api/ps');
-    const j = await r.json();
-    if (j.models && j.models.length > 0) _loadedModel = j.models[0].name;
-    else _loadedModel = null;
-  } catch { _loadedModel = null; }
+function checkLoadedModel() {
+  // Derive from state instead of extra fetch — refreshRunning() already polls /api/ps
+  _loadedModel = state.runningModels.length > 0 ? state.runningModels[0].name : _loadedModel;
 }
 
 function updateThinkingStatus(bubble, text) {
@@ -1930,7 +1923,7 @@ async function sendChat() {
   if (!model) { toast('No models available', 'error'); return; }
 
   // Check if model swap needed — warn user
-  await checkLoadedModel();
+  checkLoadedModel();
   if (_loadedModel && _loadedModel !== model && !isOpenRouter()) {
     const currentSize = MODEL_SIZES[_loadedModel] || '?';
     const newSize = MODEL_SIZES[model] || '?';
@@ -2015,6 +2008,8 @@ async function sendChat() {
 
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text().catch(() => 'unknown error')}`);
 
+    const chatMsgsEl = document.getElementById('chat-messages');
+    const chatTpsEl = document.getElementById('chat-tps');
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
 
@@ -2038,15 +2033,15 @@ async function sendChat() {
             fullText += token;
             tokenCount++;
             bubble.textContent = fullText;
-            document.getElementById('chat-messages').scrollTop = 9999;
+            chatMsgsEl.scrollTop = 9999;
             const tps = (tokenCount / ((Date.now() - start) / 1000)).toFixed(1);
-            document.getElementById('chat-tps').textContent = tps;
+            chatTpsEl.textContent = tps;
           }
           // Ollama final stats
           if (j.done) {
             const finalTps = j.eval_count && j.eval_duration
               ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1) : null;
-            if (finalTps) document.getElementById('chat-tps').textContent = finalTps;
+            if (finalTps) chatTpsEl.textContent = finalTps;
             logEvent(`Chat ${model}: ${finalTps||'?'} tok/s`, 'ok');
             trackTokens(j.prompt_eval_count || 0, j.eval_count || tokenCount);
           }
@@ -2108,7 +2103,10 @@ let autoRefreshInterval = null;
 function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
   if (!isOpenRouter()) {
-    autoRefreshInterval = setInterval(refreshRunning, 8000); // refresh running models every 8s
+    autoRefreshInterval = setInterval(() => {
+      if (document.hidden || chatRunning || state.inferring) return;
+      refreshRunning();
+    }, 8000);
   }
 }
 
