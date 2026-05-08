@@ -577,14 +577,14 @@
     <!-- Tabs: Inference / Benchmark -->
     <div id="center-tabs-section">
       <div class="tabs">
-        <div class="tab active" onclick="switchTab('infer')">Inference</div>
-        <div class="tab" onclick="switchTab('chat')">Chat</div>
+        <div class="tab" onclick="switchTab('infer')">Inference</div>
+        <div class="tab active" onclick="switchTab('chat')">Chat</div>
         <div class="tab" onclick="switchTab('bench')">Benchmark</div>
         <div class="tab" onclick="switchTab('log')">Event Log</div>
       </div>
 
       <!-- INFERENCE TAB -->
-      <div class="tab-panel active" id="tab-infer" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div class="tab-panel" id="tab-infer" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
         <div id="infer-controls">
           <select class="infer-select" id="infer-model" style="flex:2;">
             <option value="">— select model —</option>
@@ -619,7 +619,7 @@
             <span class="is-value na" id="is-status">idle</span>
           </div>
         </div>
-        <div id="infer-output"><span class="infer-placeholder">Select a model and type a prompt below…</span></div>
+        <div id="infer-output"><span class="infer-placeholder" style="opacity:0.4;font-size:10px;">select model above</span></div>
         <div id="infer-prompt-area">
           <textarea id="infer-prompt" placeholder="Prompt (Shift+Enter for newline, Enter to send)…" rows="6"></textarea>
           <button class="btn primary" onclick="runInfer()" style="align-self:flex-end;">▶ Run</button>
@@ -627,7 +627,7 @@
       </div>
 
       <!-- CHAT TAB -->
-      <div class="tab-panel" id="tab-chat" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div class="tab-panel active" id="tab-chat" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
         <div id="chat-controls">
           <select class="infer-select" id="chat-model" style="flex:1;min-width:140px;">
             <option value="">— select model —</option>
@@ -646,7 +646,7 @@
           <button class="btn danger" onclick="stopChat()" id="chat-stop-btn" style="display:none;">■ Stop</button>
         </div>
         <div id="chat-messages">
-          <div style="color:var(--text3);font-size:11px;text-align:center;padding:20px;">Select a model and start chatting. Full multi-turn history sent each request.</div>
+          <div style="color:var(--text3);font-size:10px;text-align:center;padding:8px;opacity:0.5;">select model above</div>
         </div>
         <div id="chat-input-area">
           <textarea id="chat-input" placeholder="Message (Enter to send, Shift+Enter for newline)…" rows="6"></textarea>
@@ -1164,7 +1164,7 @@ function selectModel(name) {
   document.querySelectorAll('.model-card').forEach(c => {
     c.classList.toggle('active', c.querySelector('.model-name')?.textContent === name);
   });
-  switchTab('infer');
+  switchTab('chat');
   toast('Selected: ' + name);
 }
 
