@@ -684,9 +684,12 @@
       <!-- CHAT TAB -->
       <div class="tab-panel active" id="tab-chat" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
         <div id="chat-controls">
-          <select class="infer-select" id="chat-model" style="flex:1;min-width:140px;">
+          <select class="infer-select" id="chat-model" style="flex:1;min-width:120px;">
             <option value="">— select model —</option>
           </select>
+          <label style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--text3);cursor:pointer;white-space:nowrap;" title="Auto-select best model based on your prompt">
+            <input type="checkbox" id="auto-route-toggle" checked style="accent-color:var(--green);cursor:pointer;">Auto
+          </label>
           <div class="chat-stat">Turns: <span id="chat-turns">0</span></div>
           <div class="chat-stat" id="chat-ctx" title="Approximate context size sent each request" style="cursor:help;">Ctx: <span id="chat-ctx-size">0</span></div>
           <div class="chat-stat">Tok/s: <span id="chat-tps">—</span></div>
@@ -1248,6 +1251,12 @@ function populateInferSelect() {
   csel.innerHTML = '<option value="">— select model —</option>' +
     state.models.map(m => `<option value="${m.name}" ${m.name===ccur?'selected':''}>${label(m)}</option>`).join('');
   if (state.selectedModel) csel.value = state.selectedModel;
+  // Set default model if nothing selected
+  if (!csel.value && !isOpenRouter()) {
+    const defaultExists = Array.from(csel.options).some(o => o.value === DEFAULT_MODEL);
+    if (defaultExists) csel.value = DEFAULT_MODEL;
+    else if (csel.options.length > 1) csel.selectedIndex = 1; // first available
+  }
 }
 
 function populateBenchCheckboxes() {
@@ -1724,6 +1733,78 @@ function updateStatsDisplay() {
     '<div class="stat-line"><span>Session</span><span>' + elapsed + 'm</span></div></div>';
 }
 
+// ==================== ONBOARDING ====================
+function showOnboarding() {
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '';
+  const div = document.createElement('div');
+  div.style.cssText = 'padding:16px;max-width:500px;margin:0 auto;';
+  div.innerHTML = `
+    <div style="font-size:13px;color:var(--green);font-weight:500;margin-bottom:12px;">Welcome — let's set up your assistant</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:12px;">
+      Answer a few quick questions so the AI knows how to help you best. This generates a personalized system prompt.
+    </div>
+    <div id="onboard-form" style="display:flex;flex-direction:column;gap:8px;">
+      <label style="font-size:9px;color:var(--text3);text-transform:uppercase;">What's your role?</label>
+      <input id="ob-role" class="infer-select" placeholder="e.g. founder, developer, analyst, student" style="width:100%;">
+      <label style="font-size:9px;color:var(--text3);text-transform:uppercase;">Main work focus?</label>
+      <input id="ob-focus" class="infer-select" placeholder="e.g. SaaS product, financial analysis, coding, research" style="width:100%;">
+      <label style="font-size:9px;color:var(--text3);text-transform:uppercase;">How should the AI respond?</label>
+      <select id="ob-style" class="infer-select" style="width:100%;">
+        <option value="direct">Direct — concise, no fluff, lead with answers</option>
+        <option value="thorough">Thorough — detailed explanations, show reasoning</option>
+        <option value="socratic">Socratic — ask questions, help me think</option>
+        <option value="peer">Peer — collaborative, challenge my ideas</option>
+      </select>
+      <label style="font-size:9px;color:var(--text3);text-transform:uppercase;">Anything specific? (optional)</label>
+      <input id="ob-extra" class="infer-select" placeholder="e.g. I prefer tables, always show trade-offs" style="width:100%;">
+      <button class="btn primary" onclick="generateOnboardPrompt()" style="margin-top:8px;align-self:flex-start;">Generate my system prompt</button>
+      <button class="btn" onclick="skipOnboarding()" style="align-self:flex-start;font-size:9px;">Skip — use default</button>
+    </div>
+  `;
+  msgs.appendChild(div);
+}
+
+function generateOnboardPrompt() {
+  const role = document.getElementById('ob-role').value.trim();
+  const focus = document.getElementById('ob-focus').value.trim();
+  const style = document.getElementById('ob-style').value;
+  const extra = document.getElementById('ob-extra').value.trim();
+
+  const styles = {
+    direct: 'Be concise and direct. Lead with the answer, not preamble. Use bullet points and tables when they aid clarity.',
+    thorough: 'Be thorough. Show your reasoning step by step. Explain trade-offs and alternatives.',
+    socratic: 'Use a Socratic approach. Ask clarifying questions before answering. Help me think through problems rather than just giving solutions.',
+    peer: 'Collaborate as a peer. Challenge my assumptions constructively. Push back when you see weak reasoning. Suggest alternatives I haven\'t considered.'
+  };
+
+  let prompt = 'You are a knowledgeable assistant';
+  if (role) prompt += ' working with a ' + role;
+  if (focus) prompt += ' focused on ' + focus;
+  prompt += '. ' + styles[style];
+  if (extra) prompt += ' ' + extra + '.';
+  prompt += ' If a question is ambiguous, ask for clarification rather than guessing.';
+
+  document.getElementById('chat-sysprompt').value = prompt;
+  document.getElementById('sysprompt-presets').value = 'custom';
+  document.getElementById('sysprompt-label').textContent = 'custom';
+  PRESETS.custom = prompt;
+  saveSysprompt();
+
+  // Clear onboarding UI
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '<div style="color:var(--text3);font-size:10px;text-align:center;padding:8px;opacity:0.5;">system prompt set — start chatting</div>';
+  toast('System prompt generated and saved');
+  // Expand system prompt section to show it
+  document.getElementById('sysprompt-section').classList.remove('collapsed');
+}
+
+function skipOnboarding() {
+  saveSysprompt();
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '<div style="color:var(--text3);font-size:10px;text-align:center;padding:8px;opacity:0.5;">select model above</div>';
+}
+
 function clearChat() {
   saveChatSession(); // archive before clearing
   chatHistory = [];
@@ -1758,12 +1839,52 @@ function appendMsg(role, content, streaming=false) {
   return bubble;
 }
 
+// ==================== AUTO-ROUTER ====================
+const ROUTE_RULES = [
+  { pattern: /\b(code|function|bug|error|refactor|debug|implement|class|api|sql|css|html|regex|script|import|module|deploy|docker|git)\b/i, model: 'qwen2.5-coder:14b', reason: 'coding' },
+  { pattern: /\b(dcf|valuation|revenue|margin|ebitda|stock|invest|portfolio|financial|balance sheet|cash flow|p\/e|market cap|dividend|roi|irr)\b/i, model: 'qwen3:14b', reason: 'analysis' },
+  { pattern: /\b(strategy|plan|business|roadmap|priority|bottleneck|leverage|ops|process|workflow|growth|scale|hiring|team)\b/i, model: 'qwen3:14b', reason: 'strategy' },
+  { pattern: /\b(explain|what is|how does|teach|learn|understand|concept|why does|definition)\b/i, model: 'qwen3:8b', reason: 'learning' },
+  { pattern: /\b(yes|no|list|name|which|when|quick|short|translate|convert|format)\b/i, model: 'qwen3:4b', reason: 'quick' },
+];
+const DEFAULT_MODEL = 'qwen3:8b';
+
+function autoRouteModel(input) {
+  for (const rule of ROUTE_RULES) {
+    if (rule.pattern.test(input)) return rule;
+  }
+  return { model: DEFAULT_MODEL, reason: 'general' };
+}
+
+function getAutoRoute() {
+  return document.getElementById('auto-route-toggle')?.checked || false;
+}
+
 async function sendChat() {
   if (chatRunning) return;
-  const model = document.getElementById('chat-model').value;
+  let model = document.getElementById('chat-model').value;
   const input = document.getElementById('chat-input').value.trim();
-  if (!model) { toast('Select a model', 'error'); return; }
   if (!input) return;
+
+  // Auto-route if enabled or no model selected
+  if (!model || getAutoRoute()) {
+    const route = autoRouteModel(input);
+    const sel = document.getElementById('chat-model');
+    // Check if routed model exists in dropdown
+    const exists = Array.from(sel.options).some(o => o.value === route.model);
+    if (exists) {
+      sel.value = route.model;
+      model = route.model;
+      if (getAutoRoute()) logEvent(`Auto-routed → ${route.model} (${route.reason})`, 'info');
+    } else {
+      // Fallback: pick first available model
+      if (!model && sel.options.length > 1) {
+        sel.selectedIndex = 1;
+        model = sel.value;
+      }
+    }
+  }
+  if (!model) { toast('No models available', 'error'); return; }
 
   const maxTurns = parseInt(document.getElementById('chat-max-turns').value) || 20;
   const userTurns = chatHistory.filter(m => m.role === 'user').length;
@@ -1915,6 +2036,10 @@ window.addEventListener('load', () => {
   calcVram();
   updateStatsDisplay();
   restoreLastChat();
+  // First-run onboarding: if no saved prompt and no chat history
+  if (!localStorage.getItem('sysprompt-text') && chatHistory.length === 0) {
+    setTimeout(showOnboarding, 1500);
+  }
   logEvent('Dashboard initialized.', 'info');
 });
 </script>
