@@ -99,11 +99,11 @@
     height: calc(100vh - 35px);
     overflow: hidden;
   }
-  #panel-models { width: 36px; min-width: 36px; transition: width 0.2s ease; }
-  #app.left-open #panel-models { width: 180px; min-width: 180px; }
+  #panel-ref { width: 36px; min-width: 36px; transition: width 0.2s ease; }
+  #app.left-open #panel-ref { width: 220px; min-width: 220px; }
   #center-col { flex: 1; min-width: 0; }
-  #panel-right { width: 36px; min-width: 36px; transition: width 0.2s ease; }
-  #app.right-open #panel-right { width: 200px; min-width: 200px; }
+  #panel-models { width: 36px; min-width: 36px; transition: width 0.2s ease; }
+  #app.right-open #panel-models { width: 200px; min-width: 200px; }
 
   /* PANELS */
   .panel {
@@ -141,16 +141,16 @@
   }
   .panel-collapsed-strip:hover { color: var(--green); background: var(--bg2); }
   /* Hide panel content when collapsed, show strip */
+  #panel-ref .panel-header, #panel-ref .panel-body { display: flex; }
+  #panel-ref .panel-collapsed-strip { display: none; }
   #panel-models .panel-header, #panel-models .panel-body { display: flex; }
   #panel-models .panel-collapsed-strip { display: none; }
-  #panel-right .panel-header, #panel-right .panel-body { display: flex; }
-  #panel-right .panel-collapsed-strip { display: none; }
-  #app:not(.left-open) #panel-models .panel-header,
-  #app:not(.left-open) #panel-models .panel-body { display: none; }
-  #app:not(.left-open) #panel-models .panel-collapsed-strip { display: flex; }
-  #app:not(.right-open) #panel-right .panel-header,
-  #app:not(.right-open) #panel-right .panel-body { display: none; }
-  #app:not(.right-open) #panel-right .panel-collapsed-strip { display: flex; }
+  #app:not(.left-open) #panel-ref .panel-header,
+  #app:not(.left-open) #panel-ref .panel-body { display: none; }
+  #app:not(.left-open) #panel-ref .panel-collapsed-strip { display: flex; }
+  #app:not(.right-open) #panel-models .panel-header,
+  #app:not(.right-open) #panel-models .panel-body { display: none; }
+  #app:not(.right-open) #panel-models .panel-collapsed-strip { display: flex; }
   /* Stats fade */
   .infer-stats { transition: opacity 0.3s; }
   .infer-stats.idle { opacity: 0.3; }
@@ -305,7 +305,7 @@
   .infer-stat .is-value.na { color: var(--text3); }
 
   /* RIGHT: REFERENCE */
-  #panel-right { border-left: 1px solid var(--border); border-right: none; }
+  /* Right panel (models) border */
   .ref-section { margin-bottom: 8px; }
   .ref-collapse {
     margin-bottom: 4px; border: 1px solid var(--border); border-radius: var(--radius);
@@ -526,23 +526,75 @@
 <!-- MAIN APP -->
 <div id="app">
 
-  <!-- LEFT: MODEL LIBRARY -->
-  <div class="panel" id="panel-models">
-    <div class="panel-collapsed-strip" onclick="togglePanel('left')">Models</div>
+  <!-- LEFT: REFERENCE -->
+  <div class="panel" id="panel-ref">
+    <div class="panel-collapsed-strip" onclick="togglePanel('left')">Ref</div>
     <div class="panel-header">
-      <span class="panel-title">Model Library</span>
-      <span class="panel-badge" id="model-count-badge">0</span>
+      <span class="panel-title">Reference</span>
+      <span class="collapse-toggle" onclick="togglePanel('left')" style="cursor:pointer;">✕</span>
     </div>
     <div class="panel-body">
-      <input type="text" id="model-search" placeholder="filter models…" oninput="filterModels(this.value)">
-      <div class="filter-bar" id="model-filter-bar" style="display:none;">
-        <button class="active" onclick="setModelFilter('all',this)">All</button>
-        <button onclick="setModelFilter('free',this)">Free</button>
-        <button onclick="setModelFilter('coding',this)">Coding</button>
-      </div>
-      <div id="model-list">
-        <div class="empty-state">Connect to Ollama to see models</div>
-      </div>
+      <details class="ref-collapse" open>
+        <summary>Commands</summary>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('ollama ps')">ps</span><span class="cmd-desc">running + VRAM</span></div>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('ollama list')">list</span><span class="cmd-desc">all models</span></div>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('nvidia-smi --query-gpu=memory.used,memory.total,temperature.gpu,utilization.gpu --format=csv -l 2')">nvidia-smi</span><span class="cmd-desc">VRAM + temp</span></div>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('OLLAMA_MAX_LOADED_MODELS=2 ollama serve')">MAX_LOADED=2</span><span class="cmd-desc">2 hot models</span></div>
+      </details>
+      <details class="ref-collapse">
+        <summary>Claude Code</summary>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('claude --continue')">--continue</span><span class="cmd-desc">resume session</span></div>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('/compact')">/compact</span><span class="cmd-desc">save context</span></div>
+        <div class="cmd-row"><span class="cmd" onclick="copyCmd('claude --dangerously-skip-permissions -p \"task\"')">skip-perms</span><span class="cmd-desc">automation</span></div>
+        <div class="tip-row good">CLAUDE.md for per-repo context.</div>
+      </details>
+      <details class="ref-collapse">
+        <summary>VRAM Calc</summary>
+        <div style="display:flex;gap:6px;margin:4px 0;align-items:center;">
+          <input id="vram-params" type="number" value="14" min="1" max="200" style="width:50px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
+          <span style="color:var(--text2);font-size:9px;">B ×</span>
+          <select id="vram-quant" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
+            <option value="4" selected>Q4</option><option value="8">Q8</option><option value="16">FP16</option>
+          </select>
+          <button class="btn" onclick="calcVram()" style="padding:2px 8px;font-size:9px;">Go</button>
+        </div>
+        <div id="vram-result" style="font-size:11px;color:var(--green);font-weight:500;"></div>
+        <div id="vram-fit" style="font-size:9px;color:var(--text3);"></div>
+      </details>
+      <details class="ref-collapse">
+        <summary>LLM Playbook</summary>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">What you can do now</div>
+        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
+          <strong>Chat/draft:</strong> qwen3:8b<br>
+          <strong>Code:</strong> qwen2.5-coder:14b<br>
+          <strong>Analysis:</strong> qwen3:14b<br>
+          <strong>Triage:</strong> qwen3:4b<br>
+          <strong>Embed:</strong> nomic-embed-text
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Local vs API</div>
+        <div class="tip-row info" style="font-size:8px;line-height:1.5;">
+          <strong>Local:</strong> sensitive data, high volume, offline, agent loops<br>
+          <strong>API:</strong> frontier quality, vision, 100k+ context
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Next to build</div>
+        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
+          1. RAG pipeline (chat with files)<br>
+          2. Agent loops (auto monitor/alert)<br>
+          3. Code review bot (git hook)<br>
+          4. Data extraction (batch PDFs)
+        </div>
+      </details>
+      <details class="ref-collapse">
+        <summary>Upgrade Path</summary>
+        <div class="tip-row good" style="font-size:8px;line-height:1.4;">
+          <strong>Now:</strong> 16GB — 8-14B well<br>
+          <strong>Next:</strong> 24GB — 32B Q8<br>
+          <strong>Goal:</strong> 48GB — 70B Q4
+        </div>
+        <div class="tip-row info" style="font-size:8px;line-height:1.4;">
+          Priority: VRAM > CPU > RAM
+        </div>
+      </details>
     </div>
   </div>
 
@@ -697,112 +749,34 @@
     </div>
   </div>
 
-  <!-- RIGHT: REFERENCE PANEL -->
-  <div class="panel" id="panel-right" style="border-right:none;">
-    <div class="panel-collapsed-strip" onclick="togglePanel('right')" style="border-right:none;border-left:1px solid var(--border);">Ref</div>
+  <!-- RIGHT: MODELS + HARDWARE -->
+  <div class="panel" id="panel-models" style="border-right:none;">
+    <div class="panel-collapsed-strip" onclick="togglePanel('right')" style="border-right:none;border-left:1px solid var(--border);">Models</div>
     <div class="panel-header">
-      <span class="panel-title">Reference</span>
+      <span class="panel-title">Models</span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span class="panel-badge" id="model-count-badge">0</span>
+        <span class="collapse-toggle" onclick="togglePanel('right')" style="cursor:pointer;">✕</span>
+      </span>
     </div>
     <div class="panel-body">
-
-      <!-- Models (always visible) -->
-      <div class="ref-section">
-        <h4>Models · bee-h</h4>
-        <div class="model-rec-row">
-          <div><div class="mr-name">qwen3:14b</div><div class="mr-use">reasoning</div></div>
-          <div class="mr-perf">~30 t/s</div>
-        </div>
-        <div class="model-rec-row">
-          <div><div class="mr-name">qwen2.5-coder:14b</div><div class="mr-use">coding</div></div>
-          <div class="mr-perf">~28 t/s</div>
-        </div>
-        <div class="model-rec-row">
-          <div><div class="mr-name">qwen3:8b</div><div class="mr-use">fast</div></div>
-          <div class="mr-perf">~55 t/s</div>
-        </div>
+      <input type="text" id="model-search" placeholder="filter models…" oninput="filterModels(this.value)">
+      <div class="filter-bar" id="model-filter-bar" style="display:none;">
+        <button class="active" onclick="setModelFilter('all',this)">All</button>
+        <button onclick="setModelFilter('free',this)">Free</button>
+        <button onclick="setModelFilter('coding',this)">Coding</button>
+      </div>
+      <div id="model-list">
+        <div class="empty-state">Connect to Ollama to see models</div>
       </div>
 
-      <!-- Collapsible sections -->
-      <details class="ref-collapse">
-        <summary>Commands</summary>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('ollama ps')">ps</span><span class="cmd-desc">running + VRAM</span></div>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('ollama list')">list</span><span class="cmd-desc">all models</span></div>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('nvidia-smi --query-gpu=memory.used,memory.total,temperature.gpu,utilization.gpu --format=csv -l 2')">nvidia-smi</span><span class="cmd-desc">VRAM + temp</span></div>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('OLLAMA_MAX_LOADED_MODELS=2 ollama serve')">MAX_LOADED=2</span><span class="cmd-desc">2 hot models</span></div>
-      </details>
-
-      <details class="ref-collapse">
+      <!-- Hardware (below models) -->
+      <details class="ref-collapse" style="margin-top:8px;">
         <summary>Hardware · SER9 Pro</summary>
         <div class="model-rec-row"><div><div class="mr-name">CPU</div><div class="mr-use">Ryzen AI 9 HX 375</div></div><div class="mr-perf">32GB DDR5</div></div>
         <div class="model-rec-row"><div><div class="mr-name">GPU</div><div class="mr-use">RTX 5060 Ti eGPU</div></div><div class="mr-perf">16GB VRAM</div></div>
         <div class="tip-row info">Max: ~13B Q8 / 30B Q4. 70B needs offload.</div>
         <div class="tip-row warn">TB4 eGPU: ~60-70% native throughput.</div>
-      </details>
-
-      <details class="ref-collapse">
-        <summary>Claude Code</summary>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('claude --continue')">--continue</span><span class="cmd-desc">resume session</span></div>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('/compact')">/compact</span><span class="cmd-desc">save context</span></div>
-        <div class="cmd-row"><span class="cmd" onclick="copyCmd('claude --dangerously-skip-permissions -p \"task\"')">skip-perms</span><span class="cmd-desc">automation</span></div>
-        <div class="tip-row good">CLAUDE.md for per-repo context.</div>
-      </details>
-
-      <details class="ref-collapse">
-        <summary>VRAM Calc</summary>
-        <div style="display:flex;gap:6px;margin:4px 0;align-items:center;">
-          <input id="vram-params" type="number" value="14" min="1" max="200" style="width:50px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
-          <span style="color:var(--text2);font-size:9px;">B ×</span>
-          <select id="vram-quant" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
-            <option value="4" selected>Q4</option>
-            <option value="8">Q8</option>
-            <option value="16">FP16</option>
-          </select>
-          <button class="btn" onclick="calcVram()" style="padding:2px 8px;font-size:9px;">Go</button>
-        </div>
-        <div id="vram-result" style="font-size:11px;color:var(--green);font-weight:500;"></div>
-        <div id="vram-fit" style="font-size:9px;color:var(--text3);"></div>
-      </details>
-
-      <details class="ref-collapse">
-        <summary>LLM Playbook</summary>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">What you can do now (16GB)</div>
-        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
-          <strong>Chat/draft:</strong> qwen3:8b — emails, summaries, brainstorm<br>
-          <strong>Code:</strong> qwen2.5-coder:14b — generate, review, refactor<br>
-          <strong>Analysis:</strong> qwen3:14b — TLT DCF, reasoning, reports<br>
-          <strong>Triage:</strong> qwen3:4b — classify, route, quick extract<br>
-          <strong>Embed:</strong> nomic-embed-text — search, RAG, similarity
-        </div>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Local vs API — when to use which</div>
-        <div class="tip-row info" style="font-size:8px;line-height:1.5;">
-          <strong>Use local:</strong> sensitive data, high volume, offline, low latency, repeatable tasks, embedding/RAG, agent loops<br>
-          <strong>Use API:</strong> frontier quality needed (Claude/GPT-4), vision, 100k+ context, one-off complex tasks
-        </div>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Next capabilities to build</div>
-        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
-          <strong>1. RAG pipeline:</strong> embed docs → vector DB → retrieval chat. Use nomic-embed + qwen3:14b. Unlocks: chat with your files/data<br>
-          <strong>2. Agent loops:</strong> cron + ollama API + comms. Agents monitor, summarise, alert autonomously<br>
-          <strong>3. Code review bot:</strong> git hook → qwen2.5-coder:14b → comms. Auto-review PRs locally<br>
-          <strong>4. Data extraction:</strong> qwen3:8b batch processing — PDFs, emails, structured output
-        </div>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Unlock with more VRAM</div>
-        <div class="tip-row warn" style="font-size:8px;line-height:1.5;">
-          <strong>24GB:</strong> 32B Q8 (near-API quality), dual 14B hot, longer context<br>
-          <strong>48GB:</strong> 70B Q4 (replaces most API calls), fine-tuning, full RAG stack<br>
-          <strong>ROI:</strong> 24GB GPU (~$800) pays for itself in ~3mo vs API costs at current volume
-        </div>
-      </details>
-
-      <details class="ref-collapse">
-        <summary>Upgrade Path</summary>
-        <div class="tip-row good" style="font-size:8px;line-height:1.4;">
-          <strong>Now:</strong> 16GB eGPU — runs 8-14B well, 32B Q4 tight<br>
-          <strong>Next:</strong> RTX 5080 24GB — run 32B Q8, dual 14B hot<br>
-          <strong>Goal:</strong> 2× 24GB or 48GB — 70B Q4 full speed, no offload
-        </div>
-        <div class="tip-row info" style="font-size:8px;line-height:1.4;">
-          <strong>Priority:</strong> VRAM > CPU > RAM. Don't upgrade CPU until GPU is 48GB+.
-        </div>
       </details>
 
     </div>
@@ -939,7 +913,14 @@ function parseModelMeta(model) {
   else if (/q8/i.test(qtag)) quant = 'Q8';
   else if (/fp16|f16/i.test(qtag)) quant = 'FP16';
   else quant = (model.details?.quantization_level || '').toUpperCase() || 'UNK';
-  return { name, base, tag, family, quant, size: model.size || 0 };
+  // Detect use case
+  let use = '';
+  if (/coder|code|codestral/i.test(name)) use = 'coding';
+  else if (/embed|nomic/i.test(name)) use = 'embed';
+  else if (/32b|70b|14b/i.test(name)) use = 'reasoning';
+  else if (/[34]b/i.test(tag) || (model.size && model.size < 5e9)) use = 'fast';
+  else if (/8b/i.test(tag) || (model.size && model.size < 8e9)) use = 'general';
+  return { name, base, tag, family, quant, size: model.size || 0, use };
 }
 
 function estimateVram(sizeBytes) {
@@ -1096,8 +1077,8 @@ function renderModelList(filter='') {
   }
 
   if (!isOpenRouter()) {
-    // Ollama: sort by size desc
-    filtered.sort((a, b) => (b.size || 0) - (a.size || 0));
+    // Ollama: sort by size ascending (increasing complexity)
+    filtered.sort((a, b) => (a.size || 0) - (b.size || 0));
   }
 
   const runningNames = new Set(state.runningModels.map(m => m.name));
@@ -1130,9 +1111,9 @@ function renderModelList(filter='') {
       <div style="padding-right:60px;">
         <div class="model-name">${meta.name}</div>
         <div class="model-meta">
+          ${meta.use ? `<span class="tag ${meta.use === 'coding' ? 'coding' : meta.use === 'fast' ? 'free' : 'family'}">${meta.use}</span>` : ''}
           ${meta.size ? `<span class="tag size">${fmtSize(meta.size)}</span>` : ''}
           ${meta.quant ? `<span class="tag quant">${meta.quant}</span>` : ''}
-          ${meta.family !== 'other' ? `<span class="tag family">${meta.family}</span>` : ''}
           ${isRunning ? '<span class="tag loaded">● loaded</span>' : ''}
         </div>
       </div>
