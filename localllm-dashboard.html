@@ -543,6 +543,10 @@
       <span class="label">Est. VRAM</span>
       <span class="value" id="meta-vram">—</span>
     </div>
+    <div class="meta-item" title="Session tokens: in/out · requests" style="cursor:help;">
+      <span class="label">Tokens</span>
+      <span class="value" id="meta-tokens" style="font-size:10px;">0</span>
+    </div>
   </div>
   <div class="controls">
     <select class="infer-select" id="provider-select" onchange="switchProvider(this.value)" style="width:120px;font-size:11px;">
@@ -782,13 +786,6 @@
         <div class="empty-state">Connect to Ollama to see models</div>
       </div>
 
-      <!-- Token Stats -->
-      <div class="ref-section" style="margin-top:8px;">
-        <h4>Session Stats</h4>
-        <div id="token-stats" style="font-family:var(--mono);font-size:9px;">
-          <div class="stat-line"><span>No activity yet</span></div>
-        </div>
-      </div>
 
       <!-- Below models: Hardware, VRAM, Playbook, Upgrade -->
       <details class="ref-collapse" style="margin-top:8px;">
@@ -1721,6 +1718,14 @@ function trackTokens(promptTok, completionTok, source, routedModel) {
 }
 
 function updateStatsDisplay() {
+  // Update top bar summary
+  const metaEl = document.getElementById('meta-tokens');
+  if (metaEl) {
+    const total = sessionStats.local.completion + sessionStats.api.completion;
+    const reqs = sessionStats.local.requests + sessionStats.api.requests;
+    metaEl.textContent = total > 1000 ? (total/1000).toFixed(1) + 'k' : total;
+    metaEl.title = `${sessionStats.local.completion} local + ${sessionStats.api.completion} API tokens · ${reqs} requests`;
+  }
   const el = document.getElementById('token-stats');
   if (!el) return;
   const L = sessionStats.local;
