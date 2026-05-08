@@ -282,7 +282,13 @@
   #infer-output::-webkit-scrollbar-thumb { background: var(--border2); }
   .infer-placeholder { color: var(--text3); font-style: italic; }
   .infer-thinking { color: var(--text3); animation: blink 1s infinite; }
+  .thinking-indicator {
+    color: var(--amber); font-family: var(--mono); font-size: 11px;
+    animation: blink 1s infinite;
+  }
+  .thinking-indicator::after { content: '...'; animation: dots 1.5s steps(3) infinite; }
   @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  @keyframes dots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
   #infer-prompt-area {
     padding: 10px 12px; display: flex; gap: 8px;
     background: var(--bg1); flex-shrink: 0;
@@ -1256,7 +1262,7 @@ async function runInfer() {
   document.getElementById('is-status').style.color = 'var(--amber)';
 
   const output = document.getElementById('infer-output');
-  output.innerHTML = '<span class="infer-thinking">▌ generating…</span>';
+  output.innerHTML = '<span class="thinking-indicator">thinking</span>';
   inferStats = { startTime: Date.now(), firstTokenTime: null, tokenCount: 0 };
 
   const temp = parseFloat(document.getElementById('infer-temp').value);
@@ -1530,7 +1536,8 @@ async function sendChat() {
 
   chatRunning = true;
   document.getElementById('chat-stop-btn').style.display = 'inline-block';
-  const bubble = appendMsg('assistant', '▌', true);
+  const bubble = appendMsg('assistant', '', true);
+  bubble.innerHTML = '<span class="thinking-indicator">thinking</span>';
 
   const ctrl = new AbortController();
   chatAbort = ctrl;
