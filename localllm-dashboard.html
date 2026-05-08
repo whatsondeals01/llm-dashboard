@@ -764,6 +764,36 @@
       </details>
 
       <details class="ref-collapse">
+        <summary>LLM Playbook</summary>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">What you can do now (16GB)</div>
+        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
+          <strong>Chat/draft:</strong> qwen3:8b — emails, summaries, brainstorm<br>
+          <strong>Code:</strong> qwen2.5-coder:14b — generate, review, refactor<br>
+          <strong>Analysis:</strong> qwen3:14b — TLT DCF, reasoning, reports<br>
+          <strong>Triage:</strong> qwen3:4b — classify, route, quick extract<br>
+          <strong>Embed:</strong> nomic-embed-text — search, RAG, similarity
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Local vs API — when to use which</div>
+        <div class="tip-row info" style="font-size:8px;line-height:1.5;">
+          <strong>Use local:</strong> sensitive data, high volume, offline, low latency, repeatable tasks, embedding/RAG, agent loops<br>
+          <strong>Use API:</strong> frontier quality needed (Claude/GPT-4), vision, 100k+ context, one-off complex tasks
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Next capabilities to build</div>
+        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
+          <strong>1. RAG pipeline:</strong> embed docs → vector DB → retrieval chat. Use nomic-embed + qwen3:14b. Unlocks: chat with your files/data<br>
+          <strong>2. Agent loops:</strong> cron + ollama API + comms. Agents monitor, summarise, alert autonomously<br>
+          <strong>3. Code review bot:</strong> git hook → qwen2.5-coder:14b → comms. Auto-review PRs locally<br>
+          <strong>4. Data extraction:</strong> qwen3:8b batch processing — PDFs, emails, structured output
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Unlock with more VRAM</div>
+        <div class="tip-row warn" style="font-size:8px;line-height:1.5;">
+          <strong>24GB:</strong> 32B Q8 (near-API quality), dual 14B hot, longer context<br>
+          <strong>48GB:</strong> 70B Q4 (replaces most API calls), fine-tuning, full RAG stack<br>
+          <strong>ROI:</strong> 24GB GPU (~$800) pays for itself in ~3mo vs API costs at current volume
+        </div>
+      </details>
+
+      <details class="ref-collapse">
         <summary>Upgrade Path</summary>
         <div class="tip-row good" style="font-size:8px;line-height:1.4;">
           <strong>Now:</strong> 16GB eGPU — runs 8-14B well, 32B Q4 tight<br>
@@ -771,9 +801,6 @@
           <strong>Goal:</strong> 2× 24GB or 48GB — 70B Q4 full speed, no offload
         </div>
         <div class="tip-row info" style="font-size:8px;line-height:1.4;">
-          <strong>Business case:</strong> 70B local replaces API costs for TLT analysis. 24GB GPU pays for itself in ~3mo vs OpenAI/Anthropic API at current volume.
-        </div>
-        <div class="tip-row warn" style="font-size:8px;line-height:1.4;">
           <strong>Priority:</strong> VRAM > CPU > RAM. Don't upgrade CPU until GPU is 48GB+.
         </div>
       </details>
