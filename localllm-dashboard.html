@@ -44,7 +44,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 20px;
+    padding: 5px 12px;
     background: var(--bg1);
     border-bottom: 1px solid var(--border);
     position: sticky; top: 0; z-index: 100;
@@ -97,7 +97,7 @@
   /* LAYOUT */
   #app {
     display: grid;
-    grid-template-columns: 220px 1fr 260px;
+    grid-template-columns: 180px 1fr 200px;
     grid-template-rows: auto 1fr;
     height: calc(100vh - 49px);
     gap: 0;
@@ -126,7 +126,7 @@
     border-radius: 10px;
   }
   .panel-body {
-    flex: 1; overflow-y: auto; padding: 12px;
+    flex: 1; overflow-y: auto; padding: 6px 8px;
   }
   .panel-body::-webkit-scrollbar { width: 4px; }
   .panel-body::-webkit-scrollbar-track { background: transparent; }
@@ -137,8 +137,8 @@
   .model-card {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 10px 12px;
-    margin-bottom: 6px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
     cursor: pointer;
     transition: all 0.15s;
     position: relative;
@@ -147,10 +147,10 @@
   .model-card.active { border-color: var(--green2); background: rgba(0,229,160,0.04); }
   .model-card.running { border-color: var(--amber2); }
   .model-name {
-    font-size: 12px; font-weight: 500; color: var(--text);
+    font-size: 11px; font-weight: 500; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .model-meta { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
+  .model-meta { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
   .tag {
     font-size: 9px; padding: 1px 6px; border-radius: 3px;
     text-transform: uppercase; letter-spacing: 0.08em;
@@ -281,38 +281,38 @@
 
   /* RIGHT: REFERENCE */
   #panel-right { grid-row: 1 / 3; border-left: 1px solid var(--border); border-right: none; }
-  .ref-section { margin-bottom: 16px; }
+  .ref-section { margin-bottom: 10px; }
   .ref-section h4 {
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em;
-    color: var(--text3); margin-bottom: 8px; padding-bottom: 4px;
+    font-size: 8px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--text3); margin-bottom: 4px; padding-bottom: 3px;
     border-bottom: 1px solid var(--border);
   }
   .cmd-row {
-    display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start;
+    display: flex; gap: 4px; margin-bottom: 3px; align-items: flex-start;
   }
-  .cmd { 
+  .cmd {
     background: var(--bg3); border: 1px solid var(--border);
-    color: var(--cyan); font-size: 10px; padding: 2px 7px;
+    color: var(--cyan); font-size: 9px; padding: 1px 5px;
     border-radius: 2px; white-space: nowrap; cursor: pointer;
     transition: border-color 0.1s; flex-shrink: 0;
   }
   .cmd:hover { border-color: var(--cyan); }
-  .cmd-desc { font-size: 10px; color: var(--text2); line-height: 1.4; }
+  .cmd-desc { font-size: 9px; color: var(--text2); line-height: 1.3; }
   .tip-row {
-    padding: 6px 8px; background: var(--bg2); border-left: 2px solid var(--border2);
-    margin-bottom: 4px; font-size: 10px; color: var(--text2); line-height: 1.4;
+    padding: 4px 6px; background: var(--bg2); border-left: 2px solid var(--border2);
+    margin-bottom: 3px; font-size: 9px; color: var(--text2); line-height: 1.3;
   }
   .tip-row.warn { border-left-color: var(--amber); }
   .tip-row.good { border-left-color: var(--green); }
   .tip-row.info { border-left-color: var(--blue); }
   .model-rec-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 8px; background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius); margin-bottom: 4px;
+    padding: 4px 6px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 3px;
   }
-  .model-rec-row .mr-name { font-size: 11px; color: var(--text); }
-  .model-rec-row .mr-use { font-size: 9px; color: var(--text3); }
-  .model-rec-row .mr-perf { font-size: 10px; color: var(--amber); }
+  .model-rec-row .mr-name { font-size: 10px; color: var(--text); }
+  .model-rec-row .mr-use { font-size: 8px; color: var(--text3); }
+  .model-rec-row .mr-perf { font-size: 9px; color: var(--amber); }
 
   /* BENCHMARK */
   #bench-results { padding: 10px; }
@@ -662,123 +662,43 @@
     </div>
     <div class="panel-body">
 
-      <!-- Hardware Profile -->
+      <!-- Quick Reference -->
       <div class="ref-section">
-        <h4>Hardware · SER9 Pro</h4>
+        <h4>Models · bee-h</h4>
         <div class="model-rec-row">
-          <div>
-            <div class="mr-name">CPU</div>
-            <div class="mr-use">Ryzen AI 9 HX 375 / R7 H255</div>
-          </div>
-          <div class="mr-perf">32GB DDR5</div>
-        </div>
-        <div class="model-rec-row">
-          <div>
-            <div class="mr-name">GPU</div>
-            <div class="mr-use">RTX 5060 Ti · ext VRAM</div>
-          </div>
-          <div class="mr-perf">16 GB</div>
-        </div>
-        <div class="tip-row info">Max practical model: ~13B Q8 or 30B Q4 (fits 16GB VRAM). 70B requires offload → slow.</div>
-        <div class="tip-row warn">eGPU bottleneck: Thunderbolt 4 bandwidth caps throughput ~30–40% vs desktop PCIe x16. Real tok/s ~60–70% of native.</div>
-      </div>
-
-      <!-- Model Recommendations -->
-      <div class="ref-section">
-        <h4>Recommended Models (your rig)</h4>
-        <div class="model-rec-row">
-          <div><div class="mr-name">qwen3:14b</div><div class="mr-use">TLT DCF · reasoning</div></div>
+          <div><div class="mr-name">qwen3:14b</div><div class="mr-use">reasoning</div></div>
           <div class="mr-perf">~30 t/s</div>
         </div>
         <div class="model-rec-row">
-          <div><div class="mr-name">qwen2.5:14b-65k</div><div class="mr-use">Long ctx · analysis</div></div>
+          <div><div class="mr-name">qwen2.5-coder:14b</div><div class="mr-use">coding</div></div>
           <div class="mr-perf">~28 t/s</div>
         </div>
         <div class="model-rec-row">
-          <div><div class="mr-name">qwen3:8b</div><div class="mr-use">Fast · batch triage</div></div>
+          <div><div class="mr-name">qwen3:8b</div><div class="mr-use">fast</div></div>
           <div class="mr-perf">~55 t/s</div>
         </div>
         <div class="model-rec-row">
-          <div><div class="mr-name">gemma3:12b</div><div class="mr-use">KidSmart · multimodal</div></div>
-          <div class="mr-perf">~32 t/s</div>
+          <div><div class="mr-name">qwen3:4b</div><div class="mr-use">triage</div></div>
+          <div class="mr-perf">~90 t/s</div>
         </div>
-        <div class="model-rec-row">
-          <div><div class="mr-name">llama3.2:3b</div><div class="mr-use">Ultra-fast · triage</div></div>
-          <div class="mr-perf">~120 t/s</div>
-        </div>
-        <div class="tip-row good">Dual model: keep qwen3:8b hot for latency-sensitive, load 14b for quality tasks.</div>
+        <div class="tip-row info">16GB VRAM · max ~13B Q8 or 30B Q4</div>
       </div>
 
-      <!-- Ollama Commands -->
+      <!-- Quick Commands -->
       <div class="ref-section">
-        <h4>Ollama CLI</h4>
+        <h4>Quick Commands</h4>
         <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('ollama ps')">ollama ps</span>
-          <span class="cmd-desc">running models + VRAM</span>
+          <span class="cmd" onclick="copyCmd('ollama ps')">ps</span>
+          <span class="cmd-desc">running + VRAM</span>
         </div>
         <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('ollama list')">ollama list</span>
-          <span class="cmd-desc">all local models</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('OLLAMA_MAX_LOADED_MODELS=2 ollama serve')">MAX_LOADED=2</span>
-          <span class="cmd-desc">allow 2 hot models</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('OLLAMA_KEEP_ALIVE=30m ollama serve')">KEEP_ALIVE</span>
-          <span class="cmd-desc">keep model in VRAM 30m</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('ollama run qwen3:14b --keepalive 0')">--keepalive 0</span>
-          <span class="cmd-desc">unload immediately after</span>
+          <span class="cmd" onclick="copyCmd('ollama list')">list</span>
+          <span class="cmd-desc">all models</span>
         </div>
         <div class="cmd-row">
           <span class="cmd" onclick="copyCmd('nvidia-smi --query-gpu=memory.used,memory.total,temperature.gpu,utilization.gpu --format=csv -l 2')">nvidia-smi</span>
-          <span class="cmd-desc">live VRAM + temp + util</span>
+          <span class="cmd-desc">VRAM + temp</span>
         </div>
-      </div>
-
-      <!-- OpenClaw -->
-      <div class="ref-section">
-        <h4>OpenClaw Quick Ref</h4>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('openclaw config set')">config set</span>
-          <span class="cmd-desc">always use this, not nano</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('pkill -9 -f openclaw; sleep 3; systemctl --user start openclaw-gateway.service')">nuke restart</span>
-          <span class="cmd-desc">nuclear restart sequence</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('openclaw status')">status</span>
-          <span class="cmd-desc">check gateway health</span>
-        </div>
-        <div class="tip-row warn">Never edit ~/.openclaw/*.json manually. Use CLI commands only.</div>
-        <div class="tip-row info">Bot token rotation: update Telegram webhook if token exposed.</div>
-      </div>
-
-      <!-- Claude Code -->
-      <div class="ref-section">
-        <h4>Claude Code · Power Usage</h4>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('claude --continue')">--continue</span>
-          <span class="cmd-desc">resume last session</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('claude --model claude-sonnet-4-20250514')">model</span>
-          <span class="cmd-desc">pin to specific model</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('/compact')">compact</span>
-          <span class="cmd-desc">compress context, save tokens</span>
-        </div>
-        <div class="cmd-row">
-          <span class="cmd" onclick="copyCmd('claude --dangerously-skip-permissions -p \"task\"')">skip-perms</span>
-          <span class="cmd-desc">non-interactive automation</span>
-        </div>
-        <div class="tip-row good">Use CLAUDE.md in project root for persistent rules/context per repo.</div>
-        <div class="tip-row good">MCP servers: add ollama-mcp to route Claude Code → your local models.</div>
-        <div class="tip-row warn">Context window: compact aggressively on long sessions or costs spike.</div>
       </div>
 
       <!-- VRAM Math -->
