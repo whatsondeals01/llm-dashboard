@@ -97,11 +97,15 @@
   /* LAYOUT */
   #app {
     display: grid;
-    grid-template-columns: 180px 1fr 200px;
+    grid-template-columns: 36px 1fr 36px;
     grid-template-rows: auto 1fr;
-    height: calc(100vh - 49px);
+    height: calc(100vh - 35px);
     gap: 0;
+    transition: grid-template-columns 0.2s ease;
   }
+  #app.left-open { grid-template-columns: 180px 1fr 36px; }
+  #app.right-open { grid-template-columns: 36px 1fr 200px; }
+  #app.left-open.right-open { grid-template-columns: 180px 1fr 200px; }
 
   /* PANELS */
   .panel {
@@ -128,6 +132,30 @@
   .panel-body {
     flex: 1; overflow-y: auto; padding: 6px 8px;
   }
+  /* Collapsed panel strip */
+  .panel-collapsed-strip {
+    display: flex; align-items: center; justify-content: center;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    cursor: pointer; background: var(--bg1); color: var(--text3);
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; user-select: none;
+    border-right: 1px solid var(--border);
+  }
+  .panel-collapsed-strip:hover { color: var(--green); background: var(--bg2); }
+  /* Hide panel content when collapsed, show strip */
+  #panel-models .panel-header, #panel-models .panel-body { display: flex; }
+  #panel-models .panel-collapsed-strip { display: none; }
+  #panel-right .panel-header, #panel-right .panel-body { display: flex; }
+  #panel-right .panel-collapsed-strip { display: none; }
+  #app:not(.left-open) #panel-models .panel-header,
+  #app:not(.left-open) #panel-models .panel-body { display: none; }
+  #app:not(.left-open) #panel-models .panel-collapsed-strip { display: flex; }
+  #app:not(.right-open) #panel-right .panel-header,
+  #app:not(.right-open) #panel-right .panel-body { display: none; }
+  #app:not(.right-open) #panel-right .panel-collapsed-strip { display: flex; }
+  /* Stats fade */
+  .infer-stats { transition: opacity 0.3s; }
+  .infer-stats.idle { opacity: 0.3; }
   .panel-body::-webkit-scrollbar { width: 4px; }
   .panel-body::-webkit-scrollbar-track { background: transparent; }
   .panel-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
@@ -487,6 +515,7 @@
 
   <!-- LEFT: MODEL LIBRARY -->
   <div class="panel" id="panel-models">
+    <div class="panel-collapsed-strip" onclick="togglePanel('left')">Models</div>
     <div class="panel-header">
       <span class="panel-title">Model Library</span>
       <span class="panel-badge" id="model-count-badge">0</span>
@@ -657,6 +686,7 @@
 
   <!-- RIGHT: REFERENCE PANEL -->
   <div class="panel" id="panel-right" style="border-right:none;">
+    <div class="panel-collapsed-strip" onclick="togglePanel('right')" style="border-right:none;border-left:1px solid var(--border);">Ref</div>
     <div class="panel-header">
       <span class="panel-title">Reference</span>
     </div>
@@ -1184,6 +1214,7 @@ async function runInfer() {
   state.inferring = true;
   document.getElementById('stop-btn').style.display = 'inline-block';
   document.getElementById('is-status').textContent = 'loading…';
+  document.querySelector('.infer-stats').classList.remove('idle');
   document.getElementById('is-status').style.color = 'var(--amber)';
 
   const output = document.getElementById('infer-output');
@@ -1284,6 +1315,7 @@ async function runInfer() {
     document.getElementById('is-status').style.color = 'var(--text3)';
   }
   state.inferring = false;
+  setTimeout(() => document.querySelector('.infer-stats').classList.add('idle'), 3000);
   state.inferAbort = null;
   document.getElementById('stop-btn').style.display = 'none';
 }
@@ -1379,6 +1411,12 @@ async function runBenchmark() {
 }
 
 // ==================== TABS ====================
+function togglePanel(side) {
+  const app = document.getElementById('app');
+  if (side === 'left') app.classList.toggle('left-open');
+  else app.classList.toggle('right-open');
+}
+
 function switchTab(name) {
   const names = ['infer', 'chat', 'bench', 'log'];
   document.querySelectorAll('.tab').forEach((t, i) => {
