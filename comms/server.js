@@ -158,8 +158,8 @@ app.patch('/api/action-items/:id', (req, res) => {
 });
 
 // Start
-const server = app.listen(PORT, () => {
-  console.log(`Agent Comms server running on http://localhost:${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Agent Comms server running on http://0.0.0.0:${PORT}`);
 });
 
 module.exports = server;
