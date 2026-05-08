@@ -287,9 +287,8 @@
   .infer-thinking { color: var(--text3); animation: blink 1s infinite; }
   .thinking-indicator {
     color: var(--amber); font-family: var(--mono); font-size: 11px;
-    animation: blink 1s infinite;
+    animation: blink 1.5s infinite; line-height: 1.6;
   }
-  .thinking-indicator::after { content: '...'; animation: dots 1.5s steps(3) infinite; }
   @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
   @keyframes dots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
   #infer-prompt-area {
@@ -1703,12 +1702,19 @@ let sessionStats = {
   }
 })();
 
-function trackTokens(promptTok, completionTok, source) {
+function trackTokens(promptTok, completionTok, source, routedModel) {
   const bucket = (source || (isOpenRouter() ? 'api' : 'local'));
   const s = sessionStats[bucket] || sessionStats.local;
   s.prompt += promptTok || 0;
   s.completion += completionTok || 0;
   s.requests++;
+  // Track per-model usage
+  if (!sessionStats.models) sessionStats.models = {};
+  const mKey = routedModel || document.getElementById('chat-model').value || 'unknown';
+  if (!sessionStats.models[mKey]) sessionStats.models[mKey] = { prompt: 0, completion: 0, requests: 0 };
+  sessionStats.models[mKey].prompt += promptTok || 0;
+  sessionStats.models[mKey].completion += completionTok || 0;
+  sessionStats.models[mKey].requests++;
   sessionStats.date = new Date().toDateString();
   localStorage.setItem('llm-session-stats', JSON.stringify(sessionStats));
   updateStatsDisplay();
@@ -1719,18 +1725,30 @@ function updateStatsDisplay() {
   if (!el) return;
   const L = sessionStats.local;
   const A = sessionStats.api;
+  const models = sessionStats.models || {};
   const elapsed = Math.round((Date.now() - sessionStats.startTime) / 60000);
-  el.innerHTML =
+  let html =
     '<div style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Local (Ollama)</div>' +
     '<div class="stat-line"><span>In / Out</span><span>' + L.prompt.toLocaleString() + ' / ' + L.completion.toLocaleString() + '</span></div>' +
-    '<div class="stat-line"><span>Requests</span><span>' + L.requests + '</span></div>' +
-    (A.requests > 0 ? (
+    '<div class="stat-line"><span>Requests</span><span>' + L.requests + '</span></div>';
+  if (A.requests > 0) {
+    html +=
       '<div style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin:4px 0 2px;">API (OpenRouter)</div>' +
       '<div class="stat-line"><span>In / Out</span><span>' + A.prompt.toLocaleString() + ' / ' + A.completion.toLocaleString() + '</span></div>' +
-      '<div class="stat-line"><span>Requests</span><span>' + A.requests + '</span></div>'
-    ) : '') +
-    '<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:3px;">' +
+      '<div class="stat-line"><span>Requests</span><span>' + A.requests + '</span></div>';
+  }
+  // Per-model breakdown
+  const mEntries = Object.entries(models).sort((a,b) => b[1].requests - a[1].requests);
+  if (mEntries.length > 0) {
+    html += '<div style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin:4px 0 2px;">By Model</div>';
+    mEntries.forEach(([name, s]) => {
+      const short = name.replace(':latest','').split(':').map((p,i) => i===0 ? p.split('-')[0] : p).join(':');
+      html += '<div class="stat-line"><span>' + esc(short) + '</span><span>' + s.requests + 'r · ' + s.completion.toLocaleString() + 't</span></div>';
+    });
+  }
+  html += '<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:3px;">' +
     '<div class="stat-line"><span>Session</span><span>' + elapsed + 'm</span></div></div>';
+  el.innerHTML = html;
 }
 
 // ==================== ONBOARDING ====================
@@ -1860,6 +1878,28 @@ function getAutoRoute() {
   return document.getElementById('auto-route-toggle')?.checked || false;
 }
 
+// Model size estimates for swap cost (GB)
+const MODEL_SIZES = {
+  'qwen3:4b': 2.5, 'qwen3:8b': 5.2, 'qwen3:14b': 9.3, 'qwen3:32b': 20.2,
+  'qwen2.5-coder:14b': 9.0, 'qwen2.5:14b-65k': 9.0, 'nomic-embed-text:latest': 0.3
+};
+
+let _loadedModel = null; // track what's hot in VRAM
+let _pendingSwap = null; // pending model swap confirmation
+
+async function checkLoadedModel() {
+  try {
+    const r = await fetch(ENDPOINT() + '/api/ps');
+    const j = await r.json();
+    if (j.models && j.models.length > 0) _loadedModel = j.models[0].name;
+    else _loadedModel = null;
+  } catch { _loadedModel = null; }
+}
+
+function updateThinkingStatus(bubble, text) {
+  if (bubble) bubble.innerHTML = '<span class="thinking-indicator">' + esc(text) + '</span>';
+}
+
 async function sendChat() {
   if (chatRunning) return;
   let model = document.getElementById('chat-model').value;
@@ -1870,14 +1910,12 @@ async function sendChat() {
   if (!model || getAutoRoute()) {
     const route = autoRouteModel(input);
     const sel = document.getElementById('chat-model');
-    // Check if routed model exists in dropdown
     const exists = Array.from(sel.options).some(o => o.value === route.model);
     if (exists) {
       sel.value = route.model;
       model = route.model;
       if (getAutoRoute()) logEvent(`Auto-routed → ${route.model} (${route.reason})`, 'info');
     } else {
-      // Fallback: pick first available model
       if (!model && sel.options.length > 1) {
         sel.selectedIndex = 1;
         model = sel.value;
@@ -1885,6 +1923,21 @@ async function sendChat() {
     }
   }
   if (!model) { toast('No models available', 'error'); return; }
+
+  // Check if model swap needed — warn user
+  await checkLoadedModel();
+  if (_loadedModel && _loadedModel !== model && !isOpenRouter()) {
+    const currentSize = MODEL_SIZES[_loadedModel] || '?';
+    const newSize = MODEL_SIZES[model] || '?';
+    const swapMsg = `Swap: ${_loadedModel} (${currentSize}GB) → ${model} (${newSize}GB). ~15-30s load time.`;
+    if (_pendingSwap !== model) {
+      _pendingSwap = model;
+      toast(swapMsg + ' Send again to confirm.', 'error');
+      logEvent(swapMsg, 'warn');
+      return;
+    }
+    _pendingSwap = null;
+  }
 
   const maxTurns = parseInt(document.getElementById('chat-max-turns').value) || 20;
   const userTurns = chatHistory.filter(m => m.role === 'user').length;
@@ -1905,7 +1958,8 @@ async function sendChat() {
   chatRunning = true;
   document.getElementById('chat-stop-btn').style.display = 'inline-block';
   const bubble = appendMsg('assistant', '', true);
-  bubble.innerHTML = '<span class="thinking-indicator">thinking</span>';
+  const isSwap = _loadedModel && _loadedModel !== model;
+  updateThinkingStatus(bubble, isSwap ? 'loading ' + model.split(':')[0] : 'connecting');
 
   const ctrl = new AbortController();
   chatAbort = ctrl;
@@ -1913,6 +1967,28 @@ async function sendChat() {
   let fullText = '';
   let tokenCount = 0;
   const start = Date.now();
+  // Progress timer — update status while waiting with helpful context
+  const _statusTimer = setInterval(() => {
+    if (tokenCount > 0) { clearInterval(_statusTimer); return; }
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    let status;
+    if (elapsed < 3) {
+      status = isSwap ? 'loading ' + model.split(':')[0] + ' into VRAM' : 'sending';
+    } else if (elapsed < 10) {
+      status = 'model processing (' + elapsed + 's)';
+    } else if (elapsed < 20) {
+      status = 'thinking (' + elapsed + 's) — qwen3 reasons internally before responding';
+    } else if (elapsed < 40) {
+      status = 'deep thinking (' + elapsed + 's) — complex prompt, still working';
+    } else if (elapsed < 60) {
+      status = 'still waiting (' + elapsed + 's) — model may be loading or overloaded';
+    } else if (elapsed < 120) {
+      status = 'very slow (' + elapsed + 's) — try Stop + smaller model (4b/8b)';
+    } else {
+      status = 'likely stuck (' + elapsed + 's) — hit Stop, check if Ollama is responsive';
+    }
+    updateThinkingStatus(bubble, status);
+  }, 1000);
 
   try {
     let resp;
@@ -1999,8 +2075,10 @@ async function sendChat() {
     bubble.classList.remove('streaming');
   }
 
+  clearInterval(_statusTimer);
   chatRunning = false;
   chatAbort = null;
+  _loadedModel = model; // track what's now hot
   document.getElementById('chat-stop-btn').style.display = 'none';
   if (!isOpenRouter()) refreshRunning();
 }
