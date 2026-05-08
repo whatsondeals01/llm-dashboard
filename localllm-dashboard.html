@@ -151,6 +151,9 @@
   #app:not(.right-open) #panel-models .panel-header,
   #app:not(.right-open) #panel-models .panel-body { display: none; }
   #app:not(.right-open) #panel-models .panel-collapsed-strip { display: flex; }
+  /* Token stat lines */
+  .stat-line { display: flex; justify-content: space-between; font-size: 9px; color: var(--text2); padding: 1px 0; }
+  .stat-line span:last-child { color: var(--text); font-weight: 500; }
   /* Stats fade */
   .infer-stats { transition: opacity 0.3s; }
   .infer-stats.idle { opacity: 0.3; }
@@ -459,12 +462,38 @@
     display: flex; gap: 8px; align-items: center;
     background: var(--bg1); flex-shrink: 0; flex-wrap: wrap;
   }
+  #sysprompt-section {
+    border-bottom: 1px solid var(--border); background: var(--bg1);
+    flex-shrink: 0; overflow: hidden; transition: max-height 0.2s ease;
+  }
+  #sysprompt-section.collapsed { max-height: 28px; }
+  #sysprompt-header {
+    display: flex; align-items: center; gap: 6px; padding: 4px 12px;
+    cursor: pointer; font-family: var(--mono); font-size: 9px; color: var(--text3);
+  }
+  #sysprompt-header:hover { color: var(--text2); }
+  #sysprompt-header .arrow { transition: transform 0.2s; display: inline-block; }
+  #sysprompt-section.collapsed #sysprompt-header .arrow { transform: rotate(-90deg); }
+  #sysprompt-body { padding: 0 12px 6px; }
+  #sysprompt-presets {
+    width: 100%; background: var(--bg2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 10px;
+    padding: 3px 6px; border-radius: var(--radius); outline: none; margin-bottom: 4px;
+  }
   #chat-sysprompt {
-    flex: 1; min-width: 150px; background: var(--bg2); border: 1px solid var(--border);
+    width: 100%; background: var(--bg2); border: 1px solid var(--border);
     color: var(--text2); font-family: var(--mono); font-size: 10px;
     padding: 5px 8px; border-radius: var(--radius); outline: none;
+    resize: vertical; min-height: 36px; max-height: 120px; line-height: 1.4;
   }
-  #chat-sysprompt:focus { border-color: var(--border2); color: var(--text); }
+  #chat-sysprompt:focus { border-color: var(--green2); color: var(--text); }
+  .sysprompt-actions { display: flex; gap: 4px; margin-top: 3px; }
+  .sysprompt-actions button {
+    font-family: var(--mono); font-size: 8px; padding: 2px 6px;
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text3);
+    border-radius: var(--radius); cursor: pointer;
+  }
+  .sysprompt-actions button:hover { color: var(--green); border-color: var(--green2); }
   .chat-stat { font-size: 10px; color: var(--text3); white-space: nowrap; }
   .chat-stat span { color: var(--text2); }
 
@@ -658,7 +687,6 @@
           <select class="infer-select" id="chat-model" style="flex:1;min-width:140px;">
             <option value="">— select model —</option>
           </select>
-          <input id="chat-sysprompt" placeholder="System prompt (optional)…" value="You are a helpful assistant.">
           <div class="chat-stat">Turns: <span id="chat-turns">0</span></div>
           <div class="chat-stat">Tok/s: <span id="chat-tps">—</span></div>
           <div class="chat-stat" style="display:flex;align-items:center;gap:4px;">
@@ -666,10 +694,31 @@
             <input id="chat-max-turns" type="number" value="20" min="1" max="200"
               style="width:46px;background:var(--bg2);border:1px solid var(--border);color:var(--text);
                      font-family:var(--mono);font-size:11px;padding:3px 5px;border-radius:var(--radius);outline:none;text-align:center;">
-            turns
           </div>
           <button class="btn amber" onclick="clearChat()">✕ Clear</button>
           <button class="btn danger" onclick="stopChat()" id="chat-stop-btn" style="display:none;">■ Stop</button>
+        </div>
+        <div id="sysprompt-section">
+          <div id="sysprompt-header" onclick="document.getElementById('sysprompt-section').classList.toggle('collapsed')">
+            <span class="arrow">▼</span>
+            <span>System Prompt</span>
+            <span id="sysprompt-label" style="color:var(--green);margin-left:auto;font-size:8px;">general</span>
+          </div>
+          <div id="sysprompt-body">
+            <select id="sysprompt-presets" onchange="loadPreset(this.value)">
+              <option value="general" selected>General — direct, concise assistant</option>
+              <option value="analyst">Analyst — financial/DCF/TLT focus</option>
+              <option value="coder">Coder — clean code, minimal, pragmatic</option>
+              <option value="strategist">Strategist — business ops, planning</option>
+              <option value="tutor">Tutor — explain clearly, build understanding</option>
+              <option value="custom">Custom — write your own</option>
+            </select>
+            <textarea id="chat-sysprompt" rows="3">You are a direct, technical assistant. Be concise — lead with the answer, not preamble. Ask clarifying questions when ambiguous. Use structured output (lists, tables) when it aids clarity. Challenge weak assumptions.</textarea>
+            <div class="sysprompt-actions">
+              <button onclick="saveSysprompt()">Save as default</button>
+              <button onclick="document.getElementById('sysprompt-section').classList.add('collapsed')">Collapse</button>
+            </div>
+          </div>
         </div>
         <div id="chat-messages">
           <div style="color:var(--text3);font-size:10px;text-align:center;padding:8px;opacity:0.5;">select model above</div>
@@ -727,6 +776,14 @@
       </div>
       <div id="model-list">
         <div class="empty-state">Connect to Ollama to see models</div>
+      </div>
+
+      <!-- Token Stats -->
+      <div class="ref-section" style="margin-top:8px;">
+        <h4>Session Stats</h4>
+        <div id="token-stats" style="font-family:var(--mono);font-size:9px;">
+          <div class="stat-line"><span>No activity yet</span></div>
+        </div>
       </div>
 
       <!-- Below models: Hardware, VRAM, Playbook, Upgrade -->
@@ -1348,6 +1405,7 @@ async function runInfer() {
     document.getElementById('is-status').style.color = 'var(--text3)';
     if (!isOpenRouter()) refreshRunning();
     else logEvent(`${model}: ${inferStats.tokenCount} tokens`, 'ok');
+    trackTokens(0, inferStats.tokenCount);
   } catch(e) {
     if (e.name !== 'AbortError') {
       output.textContent = '⚠ Error: ' + e.message;
@@ -1479,6 +1537,95 @@ let chatHistory = [];   // [{role, content}]
 let chatAbort = null;
 let chatRunning = false;
 
+// ==================== SYSTEM PROMPTS ====================
+const PRESETS = {
+  general: 'You are a direct, technical assistant. Be concise — lead with the answer, not preamble. Ask clarifying questions when ambiguous. Use structured output (lists, tables) when it aids clarity. Challenge weak assumptions.',
+  analyst: 'You are a senior financial analyst specializing in DCF valuation and fundamental analysis. Be precise with numbers and methodology. Show reasoning steps. Use tables for comparisons. Challenge assumptions in any model. Flag data gaps. Output structured analysis with clear bull/bear cases.',
+  coder: 'You are a senior software engineer. Write clean, minimal code — no over-engineering. Follow existing patterns in the codebase. Explain trade-offs briefly. Prefer simple solutions. No unnecessary abstractions, comments, or type annotations unless asked. Fix the bug, not the surroundings.',
+  strategist: 'You are a business operations strategist. Think in systems — inputs, outputs, bottlenecks, leverage points. Be direct about trade-offs and priorities. Frame recommendations as: what to do, why, what it costs, what it unlocks. Use 80/20 thinking — focus on highest-impact moves.',
+  tutor: 'You are a patient technical tutor. Explain concepts by building from what the user already knows. Use analogies and examples before abstractions. Check understanding before moving on. Never condescend. Ask what level of detail they want.',
+  custom: '',
+};
+
+function loadPreset(key) {
+  const textarea = document.getElementById('chat-sysprompt');
+  const label = document.getElementById('sysprompt-label');
+  if (PRESETS[key] !== undefined) {
+    if (key !== 'custom') textarea.value = PRESETS[key];
+    label.textContent = key;
+    localStorage.setItem('sysprompt-preset', key);
+  }
+}
+
+function saveSysprompt() {
+  const key = document.getElementById('sysprompt-presets').value;
+  const text = document.getElementById('chat-sysprompt').value;
+  localStorage.setItem('sysprompt-text', text);
+  localStorage.setItem('sysprompt-preset', key);
+  if (key === 'custom') PRESETS.custom = text;
+  toast('System prompt saved');
+}
+
+// Restore on load
+(function restoreSysprompt() {
+  const savedText = localStorage.getItem('sysprompt-text');
+  const savedPreset = localStorage.getItem('sysprompt-preset');
+  if (savedText) document.getElementById('chat-sysprompt').value = savedText;
+  if (savedPreset) {
+    document.getElementById('sysprompt-presets').value = savedPreset;
+    document.getElementById('sysprompt-label').textContent = savedPreset;
+  }
+})();
+
+// ==================== TOKEN STATS ====================
+let sessionStats = {
+  local: { prompt: 0, completion: 0, requests: 0 },
+  api: { prompt: 0, completion: 0, requests: 0 },
+  startTime: Date.now()
+};
+(function restoreStats() {
+  const saved = localStorage.getItem('llm-session-stats');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      if (s.date === new Date().toDateString()) {
+        sessionStats.local = s.local || sessionStats.local;
+        sessionStats.api = s.api || sessionStats.api;
+      }
+    } catch {}
+  }
+})();
+
+function trackTokens(promptTok, completionTok, source) {
+  const bucket = (source || (isOpenRouter() ? 'api' : 'local'));
+  const s = sessionStats[bucket] || sessionStats.local;
+  s.prompt += promptTok || 0;
+  s.completion += completionTok || 0;
+  s.requests++;
+  sessionStats.date = new Date().toDateString();
+  localStorage.setItem('llm-session-stats', JSON.stringify(sessionStats));
+  updateStatsDisplay();
+}
+
+function updateStatsDisplay() {
+  const el = document.getElementById('token-stats');
+  if (!el) return;
+  const L = sessionStats.local;
+  const A = sessionStats.api;
+  const elapsed = Math.round((Date.now() - sessionStats.startTime) / 60000);
+  el.innerHTML =
+    '<div style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Local (Ollama)</div>' +
+    '<div class="stat-line"><span>In / Out</span><span>' + L.prompt.toLocaleString() + ' / ' + L.completion.toLocaleString() + '</span></div>' +
+    '<div class="stat-line"><span>Requests</span><span>' + L.requests + '</span></div>' +
+    (A.requests > 0 ? (
+      '<div style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin:4px 0 2px;">API (OpenRouter)</div>' +
+      '<div class="stat-line"><span>In / Out</span><span>' + A.prompt.toLocaleString() + ' / ' + A.completion.toLocaleString() + '</span></div>' +
+      '<div class="stat-line"><span>Requests</span><span>' + A.requests + '</span></div>'
+    ) : '') +
+    '<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:3px;">' +
+    '<div class="stat-line"><span>Session</span><span>' + elapsed + 'm</span></div></div>';
+}
+
 function clearChat() {
   chatHistory = [];
   document.getElementById('chat-messages').innerHTML =
@@ -1599,6 +1746,7 @@ async function sendChat() {
               ? (j.eval_count / (j.eval_duration / 1e9)).toFixed(1) : null;
             if (finalTps) document.getElementById('chat-tps').textContent = finalTps;
             logEvent(`Chat ${model}: ${finalTps||'?'} tok/s`, 'ok');
+            trackTokens(j.prompt_eval_count || 0, j.eval_count || tokenCount);
           }
         } catch {}
       }
@@ -1658,7 +1806,8 @@ window.addEventListener('load', () => {
   refreshAll();
   startAutoRefresh();
   calcVram();
-  logEvent('Dashboard initialized. Auto-refreshing running models every 8s.', 'info');
+  updateStatsDisplay();
+  logEvent('Dashboard initialized.', 'info');
 });
 </script>
 </body>
