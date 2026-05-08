@@ -548,53 +548,6 @@
         <div class="cmd-row"><span class="cmd" onclick="copyCmd('claude --dangerously-skip-permissions -p \"task\"')">skip-perms</span><span class="cmd-desc">automation</span></div>
         <div class="tip-row good">CLAUDE.md for per-repo context.</div>
       </details>
-      <details class="ref-collapse">
-        <summary>VRAM Calc</summary>
-        <div style="display:flex;gap:6px;margin:4px 0;align-items:center;">
-          <input id="vram-params" type="number" value="14" min="1" max="200" style="width:50px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
-          <span style="color:var(--text2);font-size:9px;">B ×</span>
-          <select id="vram-quant" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
-            <option value="4" selected>Q4</option><option value="8">Q8</option><option value="16">FP16</option>
-          </select>
-          <button class="btn" onclick="calcVram()" style="padding:2px 8px;font-size:9px;">Go</button>
-        </div>
-        <div id="vram-result" style="font-size:11px;color:var(--green);font-weight:500;"></div>
-        <div id="vram-fit" style="font-size:9px;color:var(--text3);"></div>
-      </details>
-      <details class="ref-collapse">
-        <summary>LLM Playbook</summary>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">What you can do now</div>
-        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
-          <strong>Chat/draft:</strong> qwen3:8b<br>
-          <strong>Code:</strong> qwen2.5-coder:14b<br>
-          <strong>Analysis:</strong> qwen3:14b<br>
-          <strong>Triage:</strong> qwen3:4b<br>
-          <strong>Embed:</strong> nomic-embed-text
-        </div>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Local vs API</div>
-        <div class="tip-row info" style="font-size:8px;line-height:1.5;">
-          <strong>Local:</strong> sensitive data, high volume, offline, agent loops<br>
-          <strong>API:</strong> frontier quality, vision, 100k+ context
-        </div>
-        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Next to build</div>
-        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
-          1. RAG pipeline (chat with files)<br>
-          2. Agent loops (auto monitor/alert)<br>
-          3. Code review bot (git hook)<br>
-          4. Data extraction (batch PDFs)
-        </div>
-      </details>
-      <details class="ref-collapse">
-        <summary>Upgrade Path</summary>
-        <div class="tip-row good" style="font-size:8px;line-height:1.4;">
-          <strong>Now:</strong> 16GB — 8-14B well<br>
-          <strong>Next:</strong> 24GB — 32B Q8<br>
-          <strong>Goal:</strong> 48GB — 70B Q4
-        </div>
-        <div class="tip-row info" style="font-size:8px;line-height:1.4;">
-          Priority: VRAM > CPU > RAM
-        </div>
-      </details>
     </div>
   </div>
 
@@ -770,13 +723,63 @@
         <div class="empty-state">Connect to Ollama to see models</div>
       </div>
 
-      <!-- Hardware (below models) -->
+      <!-- Below models: Hardware, VRAM, Playbook, Upgrade -->
       <details class="ref-collapse" style="margin-top:8px;">
         <summary>Hardware · SER9 Pro</summary>
         <div class="model-rec-row"><div><div class="mr-name">CPU</div><div class="mr-use">Ryzen AI 9 HX 375</div></div><div class="mr-perf">32GB DDR5</div></div>
         <div class="model-rec-row"><div><div class="mr-name">GPU</div><div class="mr-use">RTX 5060 Ti eGPU</div></div><div class="mr-perf">16GB VRAM</div></div>
         <div class="tip-row info">Max: ~13B Q8 / 30B Q4. 70B needs offload.</div>
         <div class="tip-row warn">TB4 eGPU: ~60-70% native throughput.</div>
+      </details>
+
+      <details class="ref-collapse">
+        <summary>VRAM Calc</summary>
+        <div style="display:flex;gap:6px;margin:4px 0;align-items:center;">
+          <input id="vram-params" type="number" value="14" min="1" max="200" style="width:50px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
+          <span style="color:var(--text2);font-size:9px;">B ×</span>
+          <select id="vram-quant" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--radius);outline:none;">
+            <option value="4" selected>Q4</option><option value="8">Q8</option><option value="16">FP16</option>
+          </select>
+          <button class="btn" onclick="calcVram()" style="padding:2px 8px;font-size:9px;">Go</button>
+        </div>
+        <div id="vram-result" style="font-size:11px;color:var(--green);font-weight:500;"></div>
+        <div id="vram-fit" style="font-size:9px;color:var(--text3);"></div>
+      </details>
+
+      <details class="ref-collapse">
+        <summary>LLM Playbook</summary>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">What you can do now</div>
+        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
+          <strong>Chat/draft:</strong> qwen3:8b<br>
+          <strong>Code:</strong> qwen2.5-coder:14b<br>
+          <strong>Analysis:</strong> qwen3:14b<br>
+          <strong>Triage:</strong> qwen3:4b<br>
+          <strong>Embed:</strong> nomic-embed-text
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Local vs API</div>
+        <div class="tip-row info" style="font-size:8px;line-height:1.5;">
+          <strong>Local:</strong> sensitive data, high volume, offline, agent loops<br>
+          <strong>API:</strong> frontier quality, vision, 100k+ context
+        </div>
+        <div style="padding:4px 0;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Next to build</div>
+        <div class="tip-row good" style="font-size:8px;line-height:1.5;">
+          1. RAG pipeline (chat with files)<br>
+          2. Agent loops (auto monitor/alert)<br>
+          3. Code review bot (git hook)<br>
+          4. Data extraction (batch PDFs)
+        </div>
+      </details>
+
+      <details class="ref-collapse">
+        <summary>Upgrade Path</summary>
+        <div class="tip-row good" style="font-size:8px;line-height:1.4;">
+          <strong>Now:</strong> 16GB — 8-14B well<br>
+          <strong>Next:</strong> 24GB — 32B Q8<br>
+          <strong>Goal:</strong> 48GB — 70B Q4
+        </div>
+        <div class="tip-row info" style="font-size:8px;line-height:1.4;">
+          Priority: VRAM > CPU > RAM
+        </div>
       </details>
 
     </div>
